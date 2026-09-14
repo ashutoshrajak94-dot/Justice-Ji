@@ -1203,19 +1203,13 @@ export default async function handler(req: any, res: any) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
-    const questionText = body.question || body.query || body.userQuery || "";
+    const question = body.question || body.query || body.userQuery || "";
     const state = body.state || "";
     const district = body.district || "";
     const userFacts = body.userFacts || "";
     const generateDraft = Boolean(body.generateDraft);
 
-    // फ़ाइल में उपलब्ध मुख्य रिसर्च फ़ंक्शन कॉल करें
-    let result: any;
-    if (typeof (globalThis as any).researchNewQuestion === "function") {
-      result = await (globalThis as any).researchNewQuestion(questionText, state, district, userFacts, generateDraft);
-    } else if (typeof (searchOfficialWeb as any) === "function") {
-      result = await (searchOfficialWeb as any)(questionText, state, district);
-    }
+    const result = await processLegalResearch(question, state, district, userFacts, generateDraft);
 
     return res.status(200).json(result);
   } catch (error: any) {
