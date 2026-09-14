@@ -1198,15 +1198,19 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
 }
 export default async function handler(req: any, res: any) {
   try {
-    const { query, userQuery, question, state, district } = req.body || {};
-    const q = query || userQuery || question || "";
-    
-    // अगर फाइल में researchNewLegalQuestion मौजूद है तो वह कॉल होगा, वरना searchOfficialWeb
-    const searchFn = (typeof researchNewLegalQuestion === 'function') 
-      ? researchNewLegalQuestion 
-      : searchOfficialWeb;
+    const body = req.body || {};
+    const query = body.query || body.question || body.userQuery || "";
+    const state = body.state || "";
+    const district = body.district || "";
 
-    const result = await searchFn(q, state, district);
+    // अगर फाइल में मुख्य फंक्शन researchNewQuestion / handleResearch है तो उसे चलाएँ
+    let result;
+    if (typeof (globalThis as any).researchNewQuestion === 'function') {
+      result = await (globalThis as any).researchNewQuestion(query, state, district);
+    } else if (typeof (searchOfficialWeb as any) === 'function') {
+      result = await searchOfficialWeb(query, state, district);
+    }
+
     return res.status(200).json(result);
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
