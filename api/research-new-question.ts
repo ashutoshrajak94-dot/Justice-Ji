@@ -1198,8 +1198,15 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
 }
 export default async function handler(req: any, res: any) {
   try {
-    const { query, state, district } = req.body || {};
-    const result = await searchOfficialWeb(query || "", state, district);
+    const { query, userQuery, question, state, district } = req.body || {};
+    const q = query || userQuery || question || "";
+    
+    // अगर फाइल में researchNewLegalQuestion मौजूद है तो वह कॉल होगा, वरना searchOfficialWeb
+    const searchFn = (typeof researchNewLegalQuestion === 'function') 
+      ? researchNewLegalQuestion 
+      : searchOfficialWeb;
+
+    const result = await searchFn(q, state, district);
     return res.status(200).json(result);
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
