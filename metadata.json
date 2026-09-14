@@ -1,0 +1,6 @@
+{
+  "name": "Justice Ji - Legal Content Assistant",
+  "description": "भारत के नागरिकों के लिए आसान, स्पष्ट और भरोसेमंद कानूनी जानकारी, धाराएं, शिकायत/FIR ड्राफ्ट्स और सत्यापित सरकारी संपर्क विवरण।",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
