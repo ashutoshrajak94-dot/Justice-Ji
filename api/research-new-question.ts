@@ -1197,22 +1197,28 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
   };
 }
 export default async function handler(req: any, res: any) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
-    const body = req.body || {};
-    const query = body.query || body.question || body.userQuery || "";
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const questionText = body.question || body.query || body.userQuery || "";
     const state = body.state || "";
     const district = body.district || "";
+    const userFacts = body.userFacts || "";
+    const generateDraft = Boolean(body.generateDraft);
 
-    // अगर फाइल में मुख्य फंक्शन researchNewQuestion / handleResearch है तो उसे चलाएँ
-    let result;
-    if (typeof (globalThis as any).researchNewQuestion === 'function') {
-      result = await (globalThis as any).researchNewQuestion(query, state, district);
-    } else if (typeof (searchOfficialWeb as any) === 'function') {
-      result = await searchOfficialWeb(query, state, district);
+    // फ़ाइल में उपलब्ध मुख्य रिसर्च फ़ंक्शन कॉल करें
+    let result: any;
+    if (typeof (globalThis as any).researchNewQuestion === "function") {
+      result = await (globalThis as any).researchNewQuestion(questionText, state, district, userFacts, generateDraft);
+    } else if (typeof (searchOfficialWeb as any) === "function") {
+      result = await (searchOfficialWeb as any)(questionText, state, district);
     }
 
     return res.status(200).json(result);
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message || "Internal server error" });
   }
 }
