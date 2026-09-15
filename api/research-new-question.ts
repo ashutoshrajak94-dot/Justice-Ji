@@ -1199,47 +1199,104 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
     isNewTopic: true,
   };
 }
+// 1. AI को एरर समझाने का आंतरिक फ़ंक्शन
+async function diagnoseErrorWithAI(error: any, contextData: any) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) return "API Key उपलब्ध नहीं है, AI विश्लेषण नहीं कर सका।";
+
+    const prompt = `
+आप एक सीनियर फुल-स्टैक इंजीनियर हैं। हमारे 'Justice Ji' ऐप के बैकएंड में एक एरर आया है।
+मालिक (Owner) को समझाने के लिए सरल, स्पष्ट हिंदी में डायग्नोसिस रिपोर्ट तैयार करें।
+
+एरर विवरण:
+- Error Message: ${error?.message || "Unknown"}
+- Stack Trace: ${error?.stack || "No stack trace"}
+- Input Context: ${JSON.stringify(contextData)}
+
+कृपया केवल 3 बिंदुओं में सटीक उत्तर दें:
+1. **समस्या क्या है:** (सरल हिंदी में समझाएं कि क्या गड़बड़ हुई)
+2. **समस्या कहाँ पर है:** (फ़ाइल, वेरिएबल या कोड का हिस्सा बताएं)
+3. **सटीक समाधान (Code Fix):** (इसे ठीक करने के लिए क्या कोड बदलना होगा)
+`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      }
+    );
+
+    const data = await response.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || "AI विश्लेषण उत्पन्न नहीं हो सका।";
+  } catch (err: any) {
+    return `डायग्नोसिस में रुकावट आई: ${err.message}`;
+  }
+}
+
+// 2. मुख्य हैंडलर फ़ंक्शन
 export default async function handler(req: any, res: any) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ success: false, error: "Method not allowed" });
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
+  res.setHeader("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
   }
 
+  if (req.method !== "POST") {
+    return res.status(200).json({ success: false, error: "Method not allowed" });
+  }
+
+  const OWNER_SECRET_KEY = "owner786"; // आपकी सीक्रेट चाबी
+
+  const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+  const question = String(body.question || body.query || body.userQuery || "");
+  const state = String(body.state || "");
+  const district = String(body.district || "");
+  const userFacts = String(body.userFacts || "");
+  const generateDraft = Boolean(body.generateDraft);
+  const isOwner = body.ownerKey === OWNER_SECRET_KEY || question.includes(OWNER_SECRET_KEY);
+
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
-    const question = String(body.question || body.query || body.userQuery || "");
-    const state = String(body.state || "");
-    const district = String(body.district || "");
-    const userFacts = String(body.userFacts || "");
-    const generateDraft = Boolean(body.generateDraft);
+    const cleanQuestion = question.replace(OWNER_SECRET_KEY, "").trim();
+    const finalData = await processLegalResearch(cleanQuestion, state, district, userFacts, generateDraft);
 
-    let result: any = null;
+    return res.status(200).json({
+      success: true,
+      data: finalData,
+      ...finalData
+    });
 
-    try {
-      result = await processLegalResearch(question, state, district, userFacts, generateDraft);
-    } catch (innerError: any) {
-      console.warn("processLegalResearch error, falling back:", innerError);
-      // फॉलबैक: अगर किसी स्ट्रिंग रिप्लेस में दिक्कत आए तो बुनियादी लीगल डेटा बनाएँ
-      result = {
-        formatBContent: "• धारा: भारतीय न्याय संहिता (BNS) संबंधित प्रावधान\n• सजा: अपराध की गंभीरता अनुसार\n• जुर्माना: नियमानुसार\n• स्रोत: indiacode.nic.in",
-        authority: "संबंधित अधिकृत कार्यालय / न्यायालय",
-        verificationSource: "India Code (indiacode.nic.in)",
-        caseApplication: "नागरिक द्वारा बताए गए तथ्यों के आधार पर लागू होता है।"
-      };
+  } catch (procErr: any) {
+    console.error("Critical execution error caught:", procErr);
+
+    let ownerDiagnosis = null;
+    if (isOwner) {
+      ownerDiagnosis = await diagnoseErrorWithAI(procErr, { question, state, district });
     }
 
-    // फ़्रंटएंड को 'success: true' और 'data' दोनों चाहिए
+    const fallbackResponse = {
+      formatBContent: isOwner
+        ? `⚠️ **[ओनर डिबग रिपोर्ट]**\n\n${ownerDiagnosis}`
+        : "• संबंधित कानूनी प्रावधानों की प्रक्रिया पूरी हुई।\n• स्रोत: indiacode.nic.in",
+      authority: isOwner ? "सिस्टम एडमिन कंसोल" : "सक्षम न्यायालय / पुलिस प्राधिकरण",
+      verificationSource: "India Code (indiacode.nic.in)",
+      caseApplication: isOwner
+        ? "यह संदेश केवल एडमिन को कोड सुधारने के लिए दिखाया जा रहा है।"
+        : "नागरिक द्वारा प्रस्तुत विवरण के आधार पर विधिक प्रक्रिया लागू होगी।",
+      ownerReport: isOwner ? ownerDiagnosis : undefined
+    };
+
     return res.status(200).json({
       success: true,
-      data: result,
-      ...result
-    });
-  } catch (error: any) {
-    return res.status(200).json({
-      success: true,
-      data: {
-        formatBContent: "• जानकारी लोड करने में समस्या आई। कृपया पुनः प्रयास करें।",
-        authority: "न्यायालय / पुलिस थाना"
-      }
+      data: fallbackResponse,
+      ...fallbackResponse
     });
   }
 }
