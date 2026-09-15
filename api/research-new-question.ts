@@ -1086,36 +1086,41 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
       rawDetails.lawType || (isStateLaw ? "राज्य कानून (State Law)" : "केंद्रीय कानून (Central Law)"),
   };
 
-  // Strictly sanitize formatBContent if present
-  let formattedB = (jsonResult && jsonResult.formatBContent) ? String(jsonResult.formatBContent) : "• धारा: लागू नहीं\n• सजा: लागू नहीं\n• जुर्माना: लागू नहीं\n• स्रोत: indiacode.nic.in";
+ // Strictly sanitize formatBContent if present
+    let formattedB = "";
+    if (jsonResult && typeof jsonResult.formatBContent === "string") {
+      formattedB = jsonResult.formatBContent;
+    } else if (jsonResult && jsonResult.formatBContent) {
+      formattedB = String(jsonResult.formatBContent);
+    }
 
-  // Apply GLOBAL SUB-CLAUSE RULE to formattedB section line
-  if (resolvedSectionNumber && formattedB.includes("• धारा:")) {
-    formattedB = formattedB.replace(
-      /(•\s*धारा:\s*)(?:धारा\s*[\d\w()/-]+|[^\n]+)/i,
-      `$1${resolvedSectionNumber}`
-    );
-  }
+    if (formattedB) {
+      if (resolvedSectionNumber && formattedB.includes("• धारा:")) {
+        formattedB = formattedB.replace(
+          /(•\s*धारा:\s*)(?:धारा\s*[\d\w()/-]+|[^\n]+)/i,
+          `$1${resolvedSectionNumber}`
+        );
+      }
 
-  if (hasExplicitPunishment && formattedB && formattedB.includes("• सजा:")) {
-    // Replace any punishment block with explicit no-punishment statement
-    formattedB = formattedB.replace(
-      /🔴\s*सजा:[^\n]*\n(?:[^\n]*\n)?(?=🟠|🟢|स्रोत|$)/i,
-      "🔴 सजा:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
-    );
-  if (hasExplicitNoFine && formattedB && formattedB.includes("• जुर्माना:")) {
-      // Replace any fine block with explicit no-fine statement
-      formattedB = formattedB.replace(
-        /(•\s*जुर्माना:\s*)\n?(?:\s*\n)*(?:[^\n]*\n)?(?=•\s*स्रोत|$)/i,
-        "• जुर्माना:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
-      );
-    } else if (isUpLandCode && formattedB && formattedB.includes("• जुर्माना:")) {
-    formattedB = formattedB.replace(
-      /(?:\*\*|)?(?:दो\s*हजार\s*रुपये|दो\s*हज़ार\s*रुपये|₹\s*2,?000|2,?000\s*रुपये)(?:\*\*|)?/gi,
-      "विहित सीमा तक शास्ति (सटीक राशि हेतु official text verification आवश्यक)"
-    );
-  }
+      if (hasExplicitPunishment && formattedB.includes("• सजा:")) {
+        formattedB = formattedB.replace(
+          /(•\s*सजा:\s*\n?)(?:[^\n]*\n)?(?=•\s*स्रोत|$)/i,
+          "• सजा:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
+        );
+      }
 
+      if (hasExplicitNoFine && formattedB.includes("• जुर्माना:")) {
+        formattedB = formattedB.replace(
+          /(•\s*जुर्माना:\s*\n?)(?:[^\n]*\n)?(?=•\s*स्रोत|$)/i,
+          "• जुर्माना:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
+        );
+      } else if (isUpLandCode && formattedB.includes("• जुर्माना:")) {
+        formattedB = formattedB.replace(
+          /(?:एक|दो|\d+)\s*हजार\s*रुपये|₹\s*2,000|2000\s*रुपये/g,
+          "विहित सीमा तक शास्ति (सटीक राशि हेतु official text verification आवश्यक)"
+        );
+      }
+    }
   // GLOBAL VERIFICATION GATE (1% भी संशय होने पर isVerified = false स्वतः ट्रिगर होगा):
   const doubtPattern =
     /(?:संशय|संदेह|संभावित|अपुष्ट|पुष्टि\s*आवश्यक|verification\s*आवश्यक|सत्यापन\s*आवश्यक|साक्ष्य\s*अपूर्ण|गजट\s*साक्ष्य\s*अपूर्ण|not\s*verified|unverified|fail|incomplete\s*evidence|discrepancy|संशोधन\s*की\s*पुष्टि\s*नहीं|अस्पष्ट|अपूर्ण\s*साक्ष्य|1%|पुष्टि\s*नहीं\s*हो\s*सकी|सटीक\s*राशि\s*हेतु|अनुमान\s*से|पुष्टि\s*न\s*होने|साक्ष्य\s*की\s*कमी)/i;
