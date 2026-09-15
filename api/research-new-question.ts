@@ -1,4 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY,
+});
 
 interface WebSearchResult {
   sources: Array<{ title: string; url: string }>;
@@ -1004,6 +1007,7 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
   const isMpLandCode = (resolvedState.includes("मध्य प्रदेश") || (rawDetails.actName || "").includes("मध्य प्रदेश") || /एमपी|MP|Madhya\s*Pradesh/i.test(question)) &&
     /(?:भूमि|भू-राजस्व|राजस्व|खेत|मेढ़|सीमा|सीमांकन|चिह्न|revenue|land|demarcation)/i.test(question + " " + (rawDetails.actName || ""));
 
+  const isUpLandCode = (resolvedState.includes("उत्तर प्रदेश") || resolvedState.includes("यूपी") || (rawDetails.actName || "").includes("उत्तर प्रदेश राजस्व")) && /(?:मेढ़|सीमा|चिह्न|boundary|mark)/i.test(question);
   if (isMpLandCode) {
     const isSection129 = /(?:129)/.test(rawDetails.sectionNumber || "");
     const isSection130 = /(?:130)/.test(rawDetails.sectionNumber || "");
@@ -1109,7 +1113,7 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
         );
       }
 
-      if (hasExplicitPunishment && formattedB.includes("• सजा:")) {
+      if (hasExplicitNoPunishment && formattedB.includes("• सजा:")) {
         formattedB = formattedB.replace(
           /(•\s*सजा:\s*\n?)(?:[^\n]*\n)?(?=•\s*स्रोत|$)/i,
           "• सजा:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
@@ -1272,7 +1276,13 @@ export default async function handler(req: any, res: any) {
 
   try {
     const cleanQuestion = question.replace(OWNER_SECRET_KEY, "").trim();
-    const finalData = await processLegalResearch(cleanQuestion, state, district, userFacts, generateDraft);
+    const finalData = await processLegalResearch(ai, {
+  question: cleanQuestion,
+  state,
+  district,
+  userFacts,
+  generateDraft,
+});
 
     return res.status(200).json({
       success: true,
