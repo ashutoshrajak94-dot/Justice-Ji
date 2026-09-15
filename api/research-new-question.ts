@@ -10,6 +10,9 @@ export async function searchOfficialWeb(
   state?: string,
   district?: string
 ): Promise<WebSearchResult> {
+query = typeof query === "string" ? query : "";
+  state = typeof state === "string" ? state : "";
+  district = typeof district === "string" ? district : "";
   const sources: Array<{ title: string; url: string }> = [];
   const snippets: string[] = [];
 
@@ -103,20 +106,20 @@ const cleanQuery = safeQuery.replace(/[^\w\s\u0900-\u097F]/gi, " ");
       detectedActName = "Rajasthan Land Revenue Act, 1956";
     } else if (/(?:BNS|भारतीय\s*न्याय\s*संहिता)/i.test(query)) {
       detectedActName = "Bharatiya Nyaya Sanhita, 2023";
-    } else if (/(?:BNSS|भारतीय\s*नागरिक\s*सुरक्षा)/i.test(query)) {
+    } else if (/(?:BNSS|भारतीय\s*नागरिक\s*सुरक्षा)/i.test(safeQuery)) {
       detectedActName = "Bharatiya Nagarik Suraksha Sanhita, 2023";
-    } else if (/(?:BSA|साक्ष्य\s*अधिनियम)/i.test(query)) {
+    } else if (/(?:BSA|साक्ष्य\s*अधिनियम)/i.test(safeQuery)) {
       detectedActName = "Bharatiya Sakshya Adhiniyam, 2023";
-    } else if (/(?:उपभोक्ता|consumer|फ्लैट|बिल्डर|पजेशन|कब्जा\s*नहीं\s*दे\s*रहा)/i.test(query)) {
+    } else if (/(?:उपभोक्ता|consumer|फ्लैट|बिल्डर|पजेशन|कब्जा\s*नहीं\s*दे\s*रहा)/i.test(safeQuery)) {
       detectedActName = "Consumer Protection Act, 2019";
-    } else if (/(?:चेक\s*बाउंस|चेक|138|cheque)/i.test(query)) {
+    } else if (/(?:चेक\s*बाउंस|चेक|138|cheque)/i.test(safeQuery)) {
       detectedActName = "Negotiable Instruments Act, 1881";
     }
   }
 
   // 3. Extract all section numbers if specifically supplied in the question (handles single or multiple like 127, 128 or 127-130)
   const sectionNumbers: string[] = [];
-  const rangeMatch = query.match(/(?:धारा|धाराएं|धाराओं|section|sections|sec\.?)\s*(\d+[A-Za-z]?)\s*(?:से|to|-)\s*(\d+[A-Za-z]?)/i);
+  const rangeMatch = safeQuery.match(/(?:धारा|धाराएं|धाराओं|section|sections|sec\.?)\s*(\d+[A-Za-z]?)\s*(?:से|to|-)\s*(\d+[A-Za-z]?)/i);
   if (rangeMatch) {
     const startNum = parseInt(rangeMatch[1], 10);
     const endNum = parseInt(rangeMatch[2], 10);
