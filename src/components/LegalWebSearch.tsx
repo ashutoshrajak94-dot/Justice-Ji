@@ -859,7 +859,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                     <span>जरूरी कागज़ात व सबूत:</span>
                   </div>
                   <ul className="text-xs text-stone-300 space-y-1.5 font-medium">
-                    {result.requiredDocuments.slice(0, 4).map((doc, idx) => (
+                    {(result.requiredDocuments || []).slice(0, 4).map((doc, idx) => (
                       <li key={idx} className="flex items-start gap-1.5">
                         <span className="text-amber-400 font-bold">•</span>
                         <span>{doc}</span>
