@@ -14,7 +14,8 @@ export async function searchOfficialWeb(
   const snippets: string[] = [];
 
   const locationContext = [district, state].filter(Boolean).join(" ");
-  const cleanQuery = (query || "").replace(/[^\w\s\u0900-\u097F]/gi, " ");
+  const safeQuery = typeof query === "string" ? query : "";
+const cleanQuery = safeQuery.replace(/[^\w\s\u0900-\u097F]/gi, " ");
 
   // 1. Detect State Name accurately from parameter or query
   let detectedState = state?.trim() || "";
