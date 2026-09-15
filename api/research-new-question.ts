@@ -1087,7 +1087,7 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
   };
 
   // Strictly sanitize formatBContent if present
-  let formattedB = String(jsonResult?.formatBContent || "");
+  let formattedB = (jsonResult && jsonResult.formatBContent) ? String(jsonResult.formatBContent) : "• धारा: लागू नहीं\n• सजा: लागू नहीं\n• जुर्माना: लागू नहीं\n• स्रोत: indiacode.nic.in";
 
   // Apply GLOBAL SUB-CLAUSE RULE to formattedB section line
   if (resolvedSectionNumber && formattedB.includes("• धारा:")) {
