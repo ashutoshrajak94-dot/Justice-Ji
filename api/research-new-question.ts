@@ -14,12 +14,12 @@ export async function searchOfficialWeb(
   const snippets: string[] = [];
 
   const locationContext = [district, state].filter(Boolean).join(" ");
-  const cleanQuery = query.replace(/[^\w\s\u0900-\u097F]/gi, " ").trim();
+  const cleanQuery = (query || "").replace(/[^\w\s\u0900-\u097F]/gi, " ");
 
   // 1. Detect State Name accurately from parameter or query
   let detectedState = state?.trim() || "";
   if (!detectedState) {
-    const stateMatch = query.match(
+    const stateMatch = (query || "").match(
       /(उत्तर\s*प्रदेश|यूपी|UP|Uttar\s*Pradesh|मध्य\s*प्रदेश|एमपी|MP|Madhya\s*Pradesh|बिहार|Bihar|राजस्थान|Rajasthan|दिल्ली|Delhi|महाराष्ट्र|Maharashtra|हरियाणा|Haryana|पंजाब|Punjab|उत्तराखंड|Uttarakhand|झारखंड|Jharkhand|गुजरात|Gujarat|छत्तीसगढ़|Chhattisgarh|पश्चिम\s*बंगाल|West Bengal)/i
     );
     if (stateMatch) {
