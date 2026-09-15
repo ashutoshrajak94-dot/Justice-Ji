@@ -13,6 +13,9 @@ export async function searchOfficialWeb(
 query = typeof query === "string" ? query : "";
   state = typeof state === "string" ? state : "";
   district = typeof district === "string" ? district : "";
+  query = typeof query === "string" ? query : "";
+  state = typeof state === "string" ? state : "";
+  district = typeof district === "string" ? district : "";
   const sources: Array<{ title: string; url: string }> = [];
   const snippets: string[] = [];
 
