@@ -1087,7 +1087,7 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
   };
 
   // Strictly sanitize formatBContent if present
-  let formattedB = jsonResult.formatBContent || "";
+  let formattedB = String(jsonResult?.formatBContent || "");
 
   // Apply GLOBAL SUB-CLAUSE RULE to formattedB section line
   if (resolvedSectionNumber && formattedB.includes("• धारा:")) {
@@ -1097,21 +1097,19 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
     );
   }
 
-  if (hasExplicitNoPunishment && formattedB.includes("🔴 सजा:")) {
+  if (hasExplicitPunishment && formattedB && formattedB.includes("• सजा:")) {
     // Replace any punishment block with explicit no-punishment statement
     formattedB = formattedB.replace(
       /🔴\s*सजा:[^\n]*\n(?:[^\n]*\n)?(?=🟠|🟢|स्रोत|$)/i,
       "🔴 सजा:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
     );
-  }
-  if (hasExplicitNoFine && formattedB.includes("🟠 जुर्माना:")) {
-    // Replace any fine block with explicit no-fine statement
-    formattedB = formattedB.replace(
-      /🟠\s*जुर्माना:[^\n]*\n(?:[^\n]*\n)?(?=🔴|🟢|स्रोत|$)/i,
-      "🟠 जुर्माना:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
-    );
-  } else if (isMpLandCode && formattedB.includes("🟠 जुर्माना:")) {
-    // Replace hallucinated 2,000 fine with verified statutory rule
+  if (hasExplicitNoFine && formattedB && formattedB.includes("• जुर्माना:")) {
+      // Replace any fine block with explicit no-fine statement
+      formattedB = formattedB.replace(
+        /(•\s*जुर्माना:\s*)\n?(?:\s*\n)*(?:[^\n]*\n)?(?=•\s*स्रोत|$)/i,
+        "• जुर्माना:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
+      );
+    } else if (isUpLandCode && formattedB && formattedB.includes("• जुर्माना:")) {
     formattedB = formattedB.replace(
       /(?:\*\*|)?(?:दो\s*हजार\s*रुपये|दो\s*हज़ार\s*रुपये|₹\s*2,?000|2,?000\s*रुपये)(?:\*\*|)?/gi,
       "विहित सीमा तक शास्ति (सटीक राशि हेतु official text verification आवश्यक)"
