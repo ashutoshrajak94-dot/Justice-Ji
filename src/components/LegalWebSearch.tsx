@@ -994,35 +994,29 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
 
             {/* 4 Essential Breakdown Points for Legal Sections */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
-              <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                <div className="font-bold text-stone-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                  <BookOpen className="w-3 h-3 text-amber-700" />
-                  <span>
-                    {result.legalSectionDetails?.isStateLaw
-                      ? "राज्य अधिनियम एवं धारा (State Act & Section):"
-                      : "अधिनियम एवं धारा (Act & Section):"}
-                  </span>
-                </div>
-                {result.legalSectionDetails?.state && (
+              {result.legalSectionDetails?.state && (
+                <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
+                  <div className="font-bold text-stone-700 uppercase tracking-wider text-xs flex items-center gap-1">
+                    <BookOpen className="w-3 h-3 text-amber-700" />
+                    <span>
+                      {result.legalSectionDetails?.isStateLaw
+                        ? "राज्य अधिनियम (State Act):"
+                        : "लागू राज्य (Applicable State):"}
+                    </span>
+                  </div>
                   <div className="text-[11px] font-semibold text-stone-600">
                     राज्य: {result.legalSectionDetails.state}
                   </div>
-                )}
-                <div className="text-sm font-bold text-stone-900">
-                  {result.legalSectionDetails?.actName || "भारतीय न्याय संहिता, 2023 / विशेष कानून"}
+                  {result.legalSectionDetails?.sectionTitle && (
+                    <div className="text-xs text-stone-700 font-medium">
+                      विषय: {result.legalSectionDetails.sectionTitle}
+                    </div>
+                  )}
                 </div>
-                <div className="text-xs font-semibold text-blue-700">
-                  {result.legalSectionDetails?.sectionNumber || result.applicableLaw}
-                </div>
-                {result.legalSectionDetails?.sectionTitle && (
-                  <div className="text-xs text-stone-700 font-medium">
-                    विषय: {result.legalSectionDetails.sectionTitle}
-                  </div>
-                )}
-              </div>
+              )}
 
               <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                <div className="font-bold text-stone-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                <div className="font-bold text-stone-700 uppercase tracking-wider text-xs flex items-center gap-1">
                   <Scale className="w-3 h-3 text-amber-700" />
                   <span>कानून में यह प्रावधान है:</span>
                 </div>
@@ -1033,7 +1027,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
               </div>
 
               <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                <div className="font-bold text-stone-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                <div className="font-bold text-stone-700 uppercase tracking-wider text-xs flex items-center gap-1">
                   <Info className="w-3 h-3 text-blue-600" />
                   <span>आपके मामले में यह लागू हो सकता है:</span>
                 </div>
