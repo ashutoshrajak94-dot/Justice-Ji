@@ -24,6 +24,7 @@ interface LegalAssistantChatProps {
 }
 
 export const LegalAssistantChat: React.FC<LegalAssistantChatProps> = ({ onOpenDraft }) => {
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
@@ -75,6 +76,11 @@ export const LegalAssistantChat: React.FC<LegalAssistantChatProps> = ({ onOpenDr
   ];
 
   const handleSendMessage = async (textToSend?: string) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }  
+  const controller = new AbortController();
+  abortControllerRef.current = controller;
     const query = (textToSend || inputQuery).trim();
     if (!query || isLoading) return;
 
