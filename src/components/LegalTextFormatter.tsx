@@ -572,7 +572,15 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
   }
 
   // Only if isVerified is true, continue rendering article lines:
-  const lines = content.split("\n");
+  // SAFETY NET: The AI response sometimes returns all numbered points
+  // ("1. समस्या क्या है... 2. क्या करें...") on a single line without
+  // real line breaks. Force a line-break before each known numbered
+  // heading so it always renders as separate, properly styled lines.
+  const normalizedContent = content.replace(
+    /\s*(\d+\.\s*(?:समस्या\s*क्या\s*है|क्या\s*करें|संबंधित\s*कानून(?:\/धारा)?|जरूरी\s*कागज़|कहाँ\s*जाएँ|वर्तमान\s*संपर्क\s*जानकारी|आगे\s*क्या\s*करें|ध्यान\s*रखें))/g,
+    "\n$1"
+  );
+  const lines = normalizedContent.split("\n");
 
   // Track context for multi-line sections like 🔴 सजा or 🟠 जुर्माना
   let inPunishmentContext = false;
