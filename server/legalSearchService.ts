@@ -484,8 +484,14 @@ export async function processLegalResearch(
 
  2. GLOBAL VERIFICATION GATE (स्वतः प्रमाणीकरण):
  यदि किसी भी धारा, उपधारा, सज़ा या राज्य संशोधन में 1% भी संशय हो, तो बिना पूछे स्वतः 'isVerified = false' ट्रिगर करो और पूरा फॉर्मेट ब्लॉक करके लाल चेतावनी कार्ड (STATUS: OVERALL RESULT: FAIL) दिखाओ। केवल 100% गजट-पुष्ट डेटा पर ही लेख अनलॉक होगा।
+3. STRICT SECTION OVERRIDES (MANDATORY):
+- Kidnapping: For any query related to 'Kidnapping', 'विधिपूर्ण संरक्षण से व्यपहरण', or taking a child away from a lawful guardian, you MUST strictly use BNS Section 137 (not 140).
+- Search Warrant / Recovery of Person: For queries regarding the recovery of a confined person or child (बच्चे की बरामदगी हेतु वारंट), you MUST strictly use BNSS Section 100 (not 97).
 
- 3. NATURAL LANGUAGE QUERY MAPPING (आम बोलचाल की भाषा सपोर्ट):
+4. UNIVERSAL DRAFT BILL FIREWALL (APPLIES TO ALL CRIMES):
+- Never rely on your internal training memory for BNS, BNSS, or BSA section numbers, as you might confuse the August 2023 Draft Bills with the Final December 2023 Enacted Acts.
+- ALWAYS extract the section numbers strictly from the 'Web Search Findings' (indiacode.gov.in) provided in the prompt context.
+ 5. NATURAL LANGUAGE QUERY MAPPING (आम बोलचाल की भाषा सपोर्ट):
  यूज़र को कोई कानूनी धारा या जटिल शब्द लिखने की ज़रूरत नहीं है।
  जब कोई नागरिक सीधी आम बोलचाल में अपनी समस्या लिखे (उदा: "मेरी बाइक चोरी हो गई", "पड़ोसी गाली-गलौज कर रहा है", "जमीन पर कब्जा कर लिया", "धमकी मिल रही है", "पैसे कट गए"):
  • सिस्टम स्वतः उसके पीछे का सही अपराध व कानूनी वर्गीकरण पहचाने।
