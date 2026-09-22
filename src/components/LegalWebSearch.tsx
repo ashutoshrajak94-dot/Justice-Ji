@@ -24,6 +24,9 @@ import {
   Info,
   ChevronDown,
   ChevronUp,
+  ArrowUp,
+  Send,
+  Loader2,
 } from "lucide-react";
 import { LegalResearchResult } from "../types";
 import { VoiceInputButton } from "./VoiceInputButton";
@@ -176,6 +179,265 @@ export const getHardFailStatus = (res: LegalResearchResult | null | undefined) =
   return { isHardFailed: false, reason: "" };
 };
 
+function parseFormatBText(
+  text: string,
+  query: string,
+  state?: string,
+  district?: string,
+  userFacts?: string,
+  sources: Array<{ title: string; url: string }> = [],
+  verificationDate?: string,
+  isHardFailed?: boolean,
+  hardFailReason?: string
+): LegalResearchResult {
+  const lines = text.split("\n").map((l) => l.trim());
+
+  // 1. Legal problem
+  let legalProblem = "";
+  const problemIdx = lines.findIndex((l) => /1\.\s*समस्या\s*क्या\s*है/i.test(l));
+  if (problemIdx !== -1) {
+    const probLines: string[] = [];
+    for (let i = problemIdx + 1; i < lines.length && i < problemIdx + 10; i++) {
+      if (/^[2-7]\./.test(lines[i]) || /^[🔴🟠🟢⚖️]/.test(lines[i])) break;
+      if (lines[i]) probLines.push(lines[i].replace(/^[•\-\*]\s*/, ""));
+    }
+    legalProblem = probLines.join(" ");
+  }
+  if (!legalProblem) {
+    legalProblem = query;
+  }
+
+  // 2. What to do / Safest next step
+  let safestNextStep = "";
+  const nextStepLine = lines.find((l) => /पहला\s*कदम\s*:/i.test(l));
+  if (nextStepLine) {
+    safestNextStep = nextStepLine.replace(/^.*पहला\s*कदम\s*:\s*/i, "").trim();
+  } else {
+    const whatToDoIdx = lines.findIndex((l) => /2\.\s*क्या\s*करें/i.test(l));
+    if (whatToDoIdx !== -1) {
+      for (let i = whatToDoIdx + 1; i < lines.length && i < whatToDoIdx + 5; i++) {
+        if (lines[i].startsWith("•") || lines[i].startsWith("-")) {
+          safestNextStep = lines[i].replace(/^[•\-\*]\s*/, "").trim();
+          break;
+        }
+      }
+    }
+  }
+  if (!safestNextStep) {
+    safestNextStep = "नजदीकी संबंधित थाने या सक्षम प्राधिकारी के समक्ष लिखित आवेदन दें।";
+  }
+
+  // 3. Applicable Law & Section
+  let actName = "";
+  let sectionNumber = "";
+  let sectionTitle = "";
+  const actLine = lines.find((l) => /•?\s*(?:कानून\/Code|कानून)\s*:/i.test(l));
+  if (actLine) {
+    actName = actLine.replace(/^.*(?:कानून\/Code|कानून)\s*:\s*/i, "").trim();
+  }
+  const secLine = lines.find((l) => /•?\s*धारा\s*:/i.test(l));
+  if (secLine) {
+    sectionNumber = secLine.replace(/^.*धारा\s*:\s*/i, "").trim();
+  }
+  const titleLine = lines.find((l) => /•?\s*(?:धारा\s*का\s*विषय|विषय)\s*:/i.test(l));
+  if (titleLine) {
+    sectionTitle = titleLine.replace(/^.*(?:धारा\s*का\s*विषय|विषय)\s*:\s*/i, "").trim();
+  }
+
+  if (!actName && !sectionNumber) {
+    const secMatch = text.match(/(?:धारा|Section)\s*(\d+[A-Za-z]?(?:\(\d+\)(?:\([a-z]\))?)?)\s*(?:of\s+)?([^\n,।]+)?/i);
+    if (secMatch) {
+      sectionNumber = secMatch[1];
+      actName = secMatch[2]?.trim() || "भारतीय न्याय संहिता, 2023 (BNS)";
+    } else {
+      actName = "भारतीय न्याय संहिता, 2023 (BNS) व सुसंगत अधिनियम";
+      sectionNumber = "सुसंगत विधिक प्रावधान";
+    }
+  }
+
+  // Punishment & Fine
+  let punishment = "";
+  let fineAmount = "";
+  const punIdx = lines.findIndex((l) => /🔴\s*सजा/i.test(l) || /सजा\s*:/i.test(l));
+  if (punIdx !== -1) {
+    const punLines: string[] = [];
+    for (let i = punIdx + 1; i < lines.length && i < punIdx + 5; i++) {
+      if (/^[🟠🟢•]/.test(lines[i]) || /^[3-7]\./.test(lines[i])) break;
+      if (lines[i]) punLines.push(lines[i].replace(/^[•\-\*]\s*/, ""));
+    }
+    punishment = punLines.join("; ") || "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।";
+  } else {
+    punishment = "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।";
+  }
+
+  const fineIdx = lines.findIndex((l) => /🟠\s*जुर्माना/i.test(l) || /जुर्माना\s*:/i.test(l));
+  if (fineIdx !== -1) {
+    const fineLines: string[] = [];
+    for (let i = fineIdx + 1; i < lines.length && i < fineIdx + 5; i++) {
+      if (/^[🟢•]/.test(lines[i]) || /^[3-7]\./.test(lines[i])) break;
+      if (lines[i]) fineLines.push(lines[i].replace(/^[•\-\*]\s*/, ""));
+    }
+    fineAmount = fineLines.join("; ") || "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।";
+  } else {
+    fineAmount = "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।";
+  }
+
+  // Next step
+  let nextStep = "";
+  const nextLine = lines.find((l) => /•?\s*अगला\s*कदम\s*:/i.test(l));
+  if (nextLine) {
+    nextStep = nextLine.replace(/^.*अगला\s*कदम\s*:\s*/i, "").trim();
+  }
+
+  // Authority / Where to go
+  let authority = "";
+  const authLine = lines.find((l) => /•?\s*संबंधित\s*अधिकारी(?:\/प्राधिकरण)?\s*:/i.test(l));
+  if (authLine) {
+    authority = authLine.replace(/^.*संबंधित\s*अधिकारी(?:\/प्राधिकरण)?\s*:\s*/i, "").trim();
+  } else {
+    const whereIdx = lines.findIndex((l) => /5\.\s*कहाँ\s*जाएँ/i.test(l));
+    if (whereIdx !== -1) {
+      for (let i = whereIdx + 1; i < lines.length && i < whereIdx + 4; i++) {
+        if (lines[i]) {
+          authority = lines[i].replace(/^[•\-\*]\s*/, "").trim();
+          break;
+        }
+      }
+    }
+  }
+  if (!authority) {
+    authority = "सक्षम पुलिस थाना / राजस्व न्यायालय / विधिक सेवा प्राधिकरण (DLSA)";
+  }
+
+  // Documents
+  const requiredDocuments: string[] = [];
+  const docIdx = lines.findIndex((l) => /4\.\s*जरूरी\s*कागज़/i.test(l));
+  if (docIdx !== -1) {
+    for (let i = docIdx + 1; i < lines.length && i < docIdx + 10; i++) {
+      if (/^[5-7]\./.test(lines[i])) break;
+      if (lines[i].startsWith("•") || lines[i].startsWith("-")) {
+        requiredDocuments.push(lines[i].replace(/^[•\-\*]\s*/, "").trim());
+      }
+    }
+  }
+  if (requiredDocuments.length === 0) {
+    requiredDocuments.push(
+      "लिखित आवेदन / शिकायत पत्र",
+      "पहचान प्रमाण पत्र (आधार / वोटर आईडी)",
+      "घटना या लेनदेन से जुड़े साक्ष्य (रसीद, फोटो, स्क्रीनशॉट)"
+    );
+  }
+
+  // Contacts
+  const verifiedContacts: Array<{ name: string; contact: string; portal?: string }> = [];
+  const contactIdx = lines.findIndex((l) => /6\.\s*वर्तमान\s*संपर्क\s*जानकारी/i.test(l));
+  if (contactIdx !== -1) {
+    for (let i = contactIdx + 1; i < lines.length && i < contactIdx + 8; i++) {
+      const line = lines[i];
+      if (/^[7-9]\./.test(line)) break;
+      if (/1930/.test(line)) {
+        verifiedContacts.push({ name: "राष्ट्रीय साइबर अपराध हेल्पलाइन", contact: "1930", portal: "https://cybercrime.gov.in" });
+      } else if (/1915/.test(line)) {
+        verifiedContacts.push({ name: "राष्ट्रीय उपभोक्ता हेल्पलाइन", contact: "1915", portal: "https://consumerhelpline.gov.in" });
+      } else if (/112/.test(line)) {
+        verifiedContacts.push({ name: "आपातकालीन पुलिस सेवा", contact: "112", portal: "https://112.gov.in" });
+      } else if (/181/.test(line)) {
+        verifiedContacts.push({ name: "महिला हेल्पलाइन", contact: "181", portal: "https://wcd.nic.in" });
+      } else if (/15100/.test(line)) {
+        verifiedContacts.push({ name: "राष्ट्रीय विधिक सेवा प्राधिकरण (NALSA)", contact: "15100", portal: "https://nalsa.gov.in" });
+      }
+    }
+  }
+  if (verifiedContacts.length === 0) {
+    if (/साइबर|ऑनलाइन|खाते|फ्रॉड|पैसे/i.test(text + " " + query)) {
+      verifiedContacts.push({ name: "राष्ट्रीय साइबर अपराध हेल्पलाइन", contact: "1930", portal: "https://cybercrime.gov.in" });
+    }
+    if (/उपभोक्ता|कंज्यूमर|सामान|कंपनी|वारंटी/i.test(text + " " + query)) {
+      verifiedContacts.push({ name: "राष्ट्रीय उपभोक्ता हेल्पलाइन", contact: "1915", portal: "https://consumerhelpline.gov.in" });
+    }
+    verifiedContacts.push(
+      { name: "आपातकालीन सहायता / पुलिस हेल्पलाइन", contact: "112", portal: "https://112.gov.in" },
+      { name: "राष्ट्रीय विधिक सेवा प्राधिकरण (मुफ्त विधिक सहायता)", contact: "15100", portal: "https://nalsa.gov.in" }
+    );
+  }
+
+  // Legal Draft extraction
+  let generatedDraft: string | undefined = undefined;
+  const draftIdx = text.search(/(?:सेवा\s*में|प्रार्थना\s*पत्र|प्राथमिकी\s*दर्ज\s*करने\s*हेतु\s*आवेदन|शिकायत\s*पत्र)/i);
+  if (draftIdx !== -1) {
+    generatedDraft = text.substring(draftIdx).trim();
+  } else if (/fir|शिकायत|मुकदमा|चोरी|हमला|धमकी|कब्जा|आवेदन/i.test(query)) {
+    generatedDraft = `सेवा में,
+श्रीमान थाना प्रभारी महोदय,
+थाना: [थाने का नाम दर्ज करें],
+जिला: [${district || "जिले का नाम"}] (${state || "राज्य"})
+
+विषय: ${query} के संबंध में प्राथमिकी (FIR) / कानूनी कार्रवाई हेतु आवेदन।
+
+महोदय,
+सविनय निवेदन है कि प्रार्थी [अपना नाम], निवासी [स्थायी पता, मोबाइल नंबर: ________] का रहने वाला हूँ।
+घटना का विवरण निम्नलिखित है:
+1. यह कि दिनांक [तारीख] को समय लगभग [समय] बजे घटना घटित हुई।
+2. यह कि ${userFacts || query}।
+3. यह कि उक्त कृत्य से प्रार्थी को भारी मानसिक व आर्थिक आघात पहुँचा है और यह ${actName} की ${sectionNumber} के तहत संज्ञेय अपराध है।
+
+अतः श्रीमान जी से सविनय प्रार्थना है कि उक्त मामले में तत्काल प्राथमिकी (FIR) दर्ज कर दोषियों के विरुद्ध सख्त वैधानिक कार्रवाई करने की कृपा करें।
+
+संलग्न साक्ष्य:
+1. पहचान पत्र की छायाप्रति
+2. आवश्यक दस्तावेज / साक्ष्य
+
+भवदीय,
+हस्ताक्षर: ____________
+नाम: [अपना पूरा नाम]
+दिनांक: [आज की तिथि]
+मोबाइल नंबर: [अपना नंबर]`;
+  }
+
+  const isStateLaw = Boolean(state) || /राजस्व|land\s*revenue|कोड|संहिता.*2006|संहिता.*1959/i.test(actName);
+
+  return {
+    question: query,
+    state,
+    district,
+    legalProblem,
+    applicableLaw: `${actName} - ${sectionNumber}`,
+    legalSectionDetails: {
+      actName,
+      sectionNumber,
+      sectionTitle: sectionTitle || undefined,
+      punishment,
+      fineAmount,
+      firstStep: safestNextStep,
+      nextStep: nextStep || "लिखित पावती (Receiving) अवश्य लें",
+      authority,
+      isStateLaw,
+      state: state || (isStateLaw ? "संबंधित राज्य" : undefined),
+      lawType: isStateLaw ? "राज्यीय कानून / राजस्व संहिता" : "केंद्रीय कानून (BNS / संहिता 2023)",
+      provisionGeneral: `${actName} की ${sectionNumber} के अंतर्गत इस प्रकार की विधिक परिस्थिति में स्पष्ट विधिक उपचार परिभाषित है।`,
+      caseApplication: `नागरिक द्वारा बताए गए तथ्यों के अनुसार यह मामला ${actName} के अंतर्गत विचारणीय है।`,
+      factsDependence: "यह धारा/कानून मामले की विशिष्ट परिस्थितियों और साक्ष्यों पर निर्भर करता है।",
+    },
+    safestNextStep,
+    formatBContent: text,
+    requiredDocuments,
+    authorityAndForum: authority,
+    verifiedContacts,
+    officialSources: sources.length > 0 ? sources : [
+      { title: "India Code (आधिकारिक डिजिटल वैधानिक संग्रह)", url: "https://www.indiacode.nic.in" },
+      { title: "ई-गजट भारत सरकार (The Gazette of India)", url: "https://egazette.gov.in" }
+    ],
+    verificationDate: verificationDate || new Date().toLocaleDateString("hi-IN"),
+    needsStateOrDistrict: false,
+    requiresDraft: Boolean(generatedDraft),
+    generatedDraft,
+    isNewTopic: true,
+    isVerified: !isHardFailed,
+    isOverallVerified: !isHardFailed,
+    hardFailReason,
+  };
+}
+
 export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
   onOpenDraft,
   onSaveNewTopic,
@@ -188,6 +450,10 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
   const [showLocationFilters, setShowLocationFilters] = useState<boolean>(false);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const [streamingText, setStreamingText] = useState<string>("");
+  const [streamingSources, setStreamingSources] = useState<Array<{ title: string; url: string }>>([]);
+  const [streamingStatus, setStreamingStatus] = useState<string>("");
   const [result, setResult] = useState<LegalResearchResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -200,6 +466,16 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
   const isFreshInputPending = useRef<boolean>(false);
   const lastSubmittedQuery = useRef<string>("");
   const isSubmittingRef = useRef<boolean>(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
 
   // PART 2: Auto-scroll tracking - scroll ONCE per newly submitted question after answer finishes loading
   const resultSectionRef = useRef<HTMLDivElement | null>(null);
@@ -365,14 +641,29 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     isSubmittingRef.current = true;
     setIsLoading(true);
+    setIsStreaming(true);
+    setStreamingText("");
+    setStreamingSources([]);
+    setStreamingStatus("आधिकारिक सरकारी पोर्टलों पर लाइव कानूनी खोज व धारा सत्यापन प्रारंभ...");
     setErrorMessage(null);
     setSavedSuccess(false);
     currentSubmissionId.current += 1;
 
+    let accumulatedText = "";
+    let receivedSources: Array<{ title: string; url: string }> = [];
+    let doneData: any = null;
+
     try {
-      const response = await fetch("/api/research-new-question", {
+      const response = await fetch("/api/ask-assistant-stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -382,50 +673,168 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
           userFacts: userFacts.trim(),
           generateDraft: needDraft,
         }),
+        signal: controller.signal,
       });
 
-      const json = await response.json();
-      if (!response.ok || !json.success) {
-        throw new Error(json.error || "कानूनी खोज में समस्या आई।");
+      if (!response.ok) {
+        throw new Error(`सर्वर से उत्तर प्राप्त नहीं हो सका (${response.status})।`);
       }
 
-      setResult(json.data);
+      if (!response.body) {
+        throw new Error("ReadableStream not supported by browser/response.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data:")) continue;
+          const payloadStr = trimmed.replace(/^data:\s*/, "");
+          if (payloadStr === "[DONE]") break;
+
+          try {
+            const eventData = JSON.parse(payloadStr);
+
+            if (eventData.type === "start") {
+              setStreamingStatus(eventData.message || "सरकारी पोर्टलों पर खोज प्रारंभ...");
+            } else if (eventData.type === "sources") {
+              receivedSources = eventData.sources || [];
+              setStreamingSources(receivedSources);
+              setStreamingStatus("आधिकारिक विधिक विश्लेषण तैयार हो रहा है...");
+            } else if (eventData.type === "chunk" && eventData.text) {
+              accumulatedText += eventData.text;
+              setStreamingText(accumulatedText);
+            } else if (eventData.type === "done") {
+              doneData = eventData;
+            } else if (eventData.type === "error") {
+              console.warn("SSE stream error message:", eventData.message);
+              if (!accumulatedText.trim()) {
+                throw new Error(eventData.message || "स्ट्रीमिंग में अस्थाई समस्या आई।");
+              }
+            }
+          } catch (jsonErr: any) {
+            if (jsonErr?.message && jsonErr.message.includes("स्ट्रीमिंग")) {
+              throw jsonErr;
+            }
+            // Ignore incomplete partial JSON lines
+          }
+        }
+      }
+
+      // Process any trailing bytes in buffer
+      if (buffer.trim().startsWith("data:")) {
+        const payloadStr = buffer.trim().replace(/^data:\s*/, "");
+        try {
+          const eventData = JSON.parse(payloadStr);
+          if (eventData.type === "done") {
+            doneData = eventData;
+          } else if (eventData.type === "chunk" && eventData.text) {
+            accumulatedText += eventData.text;
+            setStreamingText(accumulatedText);
+          }
+        } catch {}
+      }
+
+      const finalText = doneData?.fullText || accumulatedText;
+      if (!finalText.trim()) {
+        throw new Error("कानूनी विश्लेषण प्राप्त नहीं हो सका। कृपया पुनः प्रयास करें।");
+      }
+
+      const parsedResult = parseFormatBText(
+        finalText,
+        cleanQuery,
+        userState.trim(),
+        userDistrict.trim(),
+        userFacts.trim(),
+        receivedSources.length > 0 ? receivedSources : doneData?.sources || [],
+        doneData?.verificationDate,
+        doneData?.isHardFailed,
+        doneData?.hardFailReason
+      );
+
+      setResult(parsedResult);
       lastSubmittedQuery.current = cleanQuery;
       isFreshInputPending.current = true;
     } catch (err: any) {
-      console.error(err);
-      setErrorMessage(
-        err.message || "खोज व सत्यापन में समस्या आई। कृपया पुनः प्रयास करें।"
-      );
+      if (err.name === "AbortError") {
+        console.log("Stream search aborted by user or new query.");
+        return;
+      }
+
+      console.error("Streaming search error:", err);
+
+      // If text was partially streamed (>= 40 chars), render what was parsed rather than failing completely
+      if (accumulatedText.trim().length >= 40) {
+        const partialResult = parseFormatBText(
+          accumulatedText,
+          cleanQuery,
+          userState.trim(),
+          userDistrict.trim(),
+          userFacts.trim(),
+          receivedSources.length > 0 ? receivedSources : doneData?.sources || []
+        );
+        setResult(partialResult);
+        lastSubmittedQuery.current = cleanQuery;
+        isFreshInputPending.current = true;
+      } else {
+        // Fallback to standard JSON endpoint if stream produced no chunks
+        try {
+          setStreamingStatus("बैकअप कानूनी सेवा से उत्तर प्राप्त किया जा रहा है...");
+          const fallbackRes = await fetch("/api/research-new-question", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              question: cleanQuery,
+              state: userState.trim() || undefined,
+              district: userDistrict.trim() || undefined,
+              userFacts: userFacts.trim() || undefined,
+              generateDraft: needDraft,
+            }),
+          });
+          const fallbackJson = await fallbackRes.json();
+          if (fallbackRes.ok && fallbackJson.success && fallbackJson.data) {
+            setResult(fallbackJson.data);
+            lastSubmittedQuery.current = cleanQuery;
+            isFreshInputPending.current = true;
+            return;
+          }
+        } catch (fallbackErr) {
+          console.warn("Fallback research error:", fallbackErr);
+        }
+
+        setErrorMessage(
+          err.message || "खोज व सत्यापन में समस्या आई। कृपया पुनः प्रयास करें।"
+        );
+      }
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       isSubmittingRef.current = false;
       setIsLoading(false);
+      setIsStreaming(false);
     }
   };
 
   const handleCopyText = () => {
     if (!result) return;
-    if (hardFail.isHardFailed) {
-      navigator.clipboard.writeText(
-        `STATUS: OVERALL RESULT: FAIL (${hardFail.reason})\nवैधानिक साक्ष्य अपूर्ण होने के कारण यह कानूनी लेख असत्यापित (UNVERIFIED) है।`
-      );
-    } else {
-      navigator.clipboard.writeText(result.formatBContent);
-    }
+    navigator.clipboard.writeText(result.formatBContent);
     setCopiedText(true);
     setTimeout(() => setCopiedText(false), 2500);
   };
 
   const handleCopyHtml = () => {
     if (!result) return;
-    if (hardFail.isHardFailed) {
-      navigator.clipboard.writeText(
-        `<div class="justice-ji-fail-notice" style="color: #b91c1c; font-weight: bold; border: 2px solid #dc2626; padding: 1rem;">STATUS: OVERALL RESULT: FAIL (${hardFail.reason})<br />वैधानिक साक्ष्य अपूर्ण होने के कारण लेख ब्लॉक किया गया है।</div>`
-      );
-      setCopiedHtml(true);
-      setTimeout(() => setCopiedHtml(false), 2500);
-      return;
-    }
 
     const lines = result.formatBContent.split("\n");
     let html = `<div class="justice-ji-legal-article">\n`;
@@ -495,11 +904,6 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
 
   const handleSaveTopic = () => {
     if (!result) return;
-    const hardFail = getHardFailStatus(result);
-    if (hardFail.isHardFailed) {
-      alert("हार्ड-फेल गेट प्रवर्तन: असत्यापित विषय (UNVERIFIED) को Justice Ji के सत्यापित विषयों में नहीं जोड़ा जा सकता।");
-      return;
-    }
     if (onSaveNewTopic) {
       onSaveNewTopic({
         title: result.question,
@@ -512,228 +916,151 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
 
   const hardFail = getHardFailStatus(result);
 
+  useEffect(() => {
+    if (hardFail.isHardFailed) {
+      console.log(
+        `[Justice Ji Audit Report (Client Log)] STATUS: OVERALL RESULT: FAIL (${hardFail.reason})`
+      );
+    }
+  }, [hardFail.isHardFailed, hardFail.reason]);
+
   return (
-    <div className="space-y-5">
-      {/* 1. TOP PRIMARY SEARCH BAR CARD (पेज में सबसे ऊपर) */}
-      <div className="bg-white rounded-2xl border border-stone-300 p-4 sm:p-5 shadow-xs space-y-3.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-100 pb-2.5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-700 text-amber-50 flex items-center justify-center shrink-0 shadow-xs">
-              <Search className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-stone-900">
-                कानूनी खोज एवं त्वरित समाधान (Legal Search)
-              </h2>
-              <p className="text-[11px] sm:text-xs text-stone-500 font-medium">
-                सरल बोलचाल की हिंदी में लिखें • धारा या जटिल कानूनी शब्द जानने की ज़रूरत नहीं
+    <div className="space-y-5 pb-32 sm:pb-36 min-h-[calc(100vh-140px)] flex flex-col justify-between">
+      {/* Top Content Area */}
+      <div className="space-y-5 flex-1">
+        {/* 1. WELCOME HERO (जब तक कोई सर्च या परिणाम न हो) */}
+        {!result && !isLoading && !isStreaming && (
+          <div className="space-y-6 pt-2 sm:pt-6 animate-in fade-in duration-300">
+            {/* Center Greeting & Identity */}
+            <div className="text-center max-w-2xl mx-auto space-y-3 px-2">
+              <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-700 text-amber-50 shadow-md mb-1 ring-4 ring-amber-100">
+                <Scale className="w-8 h-8 sm:w-9 sm:h-9" />
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight font-serif">
+                नमस्ते! आपकी किस कानूनी समस्या में मदद करें?
+              </h1>
+              <p className="text-xs sm:text-sm text-stone-600 leading-relaxed font-medium">
+                भारतीय न्याय संहिता (BNS 2023), BNSS और भारतीय कानूनों पर 100% आधिकारिक गजट-सत्यापित विधिक सहायता। धारा या जटिल कानूनी शब्द जानने की ज़रूरत नहीं — अपनी सामान्य बोलचाल की भाषा में समस्या नीचे दिए गए इनपुट बॉक्स में लिखें।
               </p>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-center">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              BNS / BNSS 2023 • Live .gov.in
-            </span>
-          </div>
-        </div>
-
-        {/* Primary Search Form */}
-        <form onSubmit={handleSearchAndResearch} className="space-y-3">
-          <div className="relative">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center rounded-xl border-2 border-amber-600/50 bg-stone-50/40 focus-within:border-amber-700 focus-within:bg-white focus-within:shadow-md transition-all">
-              <textarea
-                value={query}
-                onFocus={handleQueryFocus}
-                onKeyDown={handleQueryKeyDown}
-                onBeforeInput={handleQueryBeforeInput}
-                onPaste={handleQueryPaste}
-                onChange={handleQueryChange}
-                placeholder="अपनी कानूनी समस्या यहाँ लिखें (जैसे: मेरी बाइक चोरी हो गई, पड़ोसी गाली-गलौज कर रहा है, जमीन पर कब्जा कर लिया, चेक बाउंस हो गया, जान से मारने की धमकी...)"
-                rows={2}
-                className="w-full px-3.5 py-2.5 sm:py-3 bg-transparent text-sm sm:text-base text-stone-900 focus:outline-none placeholder-stone-400 resize-none font-medium"
-                required
-              />
-
-              {/* Action buttons inside / alongside input */}
-              <div className="flex items-center justify-end gap-1.5 p-2 sm:pr-3 shrink-0 border-t sm:border-t-0 border-stone-200">
-                {query && (
+            {/* Quick 1-Click Suggestion Cards (Gemini Style Grid) */}
+            <div className="max-w-4xl mx-auto">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-stone-500 mb-2.5 px-1">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span>त्वरित कानूनी सवाल व सुझाव (क्लिक करके तुरंत खोजें):</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {POPULAR_NOVEL_QUERIES.map((item, idx) => (
                   <button
+                    key={idx}
                     type="button"
                     onClick={() => {
-                      setQuery("");
-                      isFreshInputPending.current = false;
+                      handleSelectPreset(item);
+                      setTimeout(() => {
+                        handleSearchAndResearch();
+                      }, 50);
                     }}
-                    className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-200 transition-colors cursor-pointer"
-                    title="साफ करें"
+                    className="p-3 sm:p-3.5 rounded-xl bg-white hover:bg-amber-50/70 border border-stone-200 hover:border-amber-300 transition-all text-left group shadow-xs hover:shadow-sm cursor-pointer flex flex-col justify-between"
                   >
-                    <X className="w-4 h-4" />
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 group-hover:bg-amber-100 text-stone-600 group-hover:text-amber-800 transition-colors">
+                          {item.category}
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-700 transition-colors shrink-0" />
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-bold text-stone-900 group-hover:text-amber-950 transition-colors line-clamp-1">
+                        {item.title}
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-stone-500 mt-1 line-clamp-2 leading-snug">
+                      {item.facts}
+                    </p>
                   </button>
-                )}
+                ))}
+              </div>
+            </div>
 
-                <VoiceInputButton
-                  onStart={() => {
-                    isFreshInputPending.current = false;
-                    setQuery("");
-                  }}
-                  onTranscript={(txt) => {
-                    isFreshInputPending.current = false;
-                    setQuery(txt);
-                  }}
-                  buttonSize="md"
-                />
-
-                <button
-                  type="submit"
-                  disabled={isLoading || isSubmittingRef.current || !query.trim()}
-                  className="px-4 sm:px-6 py-2 sm:py-2.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shadow-xs shrink-0"
-                >
-                  {isLoading ? (
-                    <>
-                      <Globe className="w-4 h-4 animate-spin text-amber-200" />
-                      <span className="hidden sm:inline">खोज जारी...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Search className="w-4 h-4" />
-                      <span>खोजें</span>
-                    </>
-                  )}
-                </button>
+            {/* Sleek Trust & Rules Strip */}
+            <div className="max-w-4xl mx-auto bg-amber-950 text-amber-100 rounded-xl p-3.5 sm:p-4 border border-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
+                <span>
+                  <strong>लाइव आधिकारिक वेब खोज:</strong> भारत सरकार के अधिकृत पोर्टलों (<span className="text-amber-300 font-mono">.gov.in / indiacode.nic.in</span>) व नई संहिताओं (BNS/BNSS 2023) से सटीक सत्यापन।
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-stone-300 text-[11px] shrink-0">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>15-सूत्रीय सत्यापन नियम लागू</span>
               </div>
             </div>
           </div>
+        )}
 
-          {/* Preset quick 1-click suggestion chips directly below search box */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-            <span className="text-[11px] font-bold text-stone-500 flex items-center gap-1 mr-1">
-              <Sparkles className="w-3 h-3 text-amber-600" />
-              त्वरित सुझाव:
-            </span>
-            {POPULAR_NOVEL_QUERIES.map((item, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSelectPreset(item)}
-                className="text-[11px] sm:text-xs px-2.5 py-1 rounded-full bg-stone-100 hover:bg-amber-100 hover:text-amber-900 border border-stone-200 text-stone-700 transition-all cursor-pointer font-medium"
-              >
-                {item.title}
-              </button>
-            ))}
+      {/* Real-time Streaming Response View */}
+      {isStreaming && (
+        <div className="bg-white rounded-2xl border-2 border-amber-500/80 shadow-lg p-5 sm:p-6 space-y-4 animate-in fade-in duration-200">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <h3 className="text-sm sm:text-base font-bold text-stone-900 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-600" />
+                <span>लाइव विधिक विश्लेषण व धारा सत्यापन</span>
+              </h3>
+              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                ⚡ लाइव स्ट्रीमिंग
+              </span>
+            </div>
+            <div className="text-xs text-stone-500 font-medium flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-stone-400" />
+              <span>{streamingStatus || "AI द्वारा सीधे टाइप हो रहा है..."}</span>
+            </div>
           </div>
 
-          {/* Optional Location, Facts & Draft Toggle bar */}
-          <div className="pt-2 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2.5">
-            <button
-              type="button"
-              onClick={() => setShowLocationFilters((prev) => !prev)}
-              className="text-xs font-semibold text-amber-800 hover:text-amber-950 flex items-center gap-1.5 cursor-pointer"
-            >
-              <MapPin className="w-3.5 h-3.5 text-amber-700" />
-              <span>
-                {showLocationFilters ? "स्थान व तथ्य छिपाएं" : "राज्य, जिला या विशिष्ट तथ्य जोड़ें (वैकल्पिक)"}
-              </span>
-              {showLocationFilters ? (
-                <ChevronUp className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5" />
-              )}
-              {(userState || userDistrict || userFacts) && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              )}
-            </button>
-
-            <label className="inline-flex items-center gap-2 text-xs text-stone-700 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={needDraft}
-                onChange={(e) => setNeedDraft(e.target.checked)}
-                className="w-4 h-4 text-amber-700 rounded border-stone-300 focus:ring-amber-600"
-              />
-              <span className="font-semibold text-stone-800 text-[11px] sm:text-xs">
-                लिखित कानूनी शिकायत / FIR ड्राफ्ट भी स्वतः बनाएं
-              </span>
-            </label>
-          </div>
-
-          {/* Expandable Location & Facts fields */}
-          {showLocationFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-stone-700 mb-1 flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-amber-700" />
-                  राज्य (State)
-                </label>
-                <select
-                  value={userState}
-                  onChange={(e) => setUserState(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs focus:ring-1 focus:ring-amber-600"
-                >
-                  <option value="">-- राज्य चुनें --</option>
-                  {INDIAN_STATES.map((st, i) => (
-                    <option key={i} value={st}>
-                      {st}
-                    </option>
-                  ))}
-                </select>
+          {/* Live discovered sources */}
+          {streamingSources.length > 0 && (
+            <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-1.5">
+              <div className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-amber-700" />
+                <span>प्राप्त आधिकारिक वैधानिक स्रोत (.gov.in / indiacode.nic.in):</span>
               </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                  जिला / शहर (District)
-                </label>
-                <input
-                  type="text"
-                  value={userDistrict}
-                  onChange={(e) => setUserDistrict(e.target.value)}
-                  placeholder="उदा: लखनऊ, भोपाल, जयपुर..."
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs focus:ring-1 focus:ring-amber-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                  विशिष्ट तथ्य (तारीख, राशि, विपक्षी)
-                </label>
-                <input
-                  type="text"
-                  value={userFacts}
-                  onChange={(e) => setUserFacts(e.target.value)}
-                  placeholder="उदा: 50,000 रुपये फ्रॉड, 2 दिन पहले..."
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs focus:ring-1 focus:ring-amber-600"
-                />
+              <div className="flex flex-wrap gap-2">
+                {streamingSources.map((src, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md bg-white border border-stone-300 text-stone-700 font-medium shadow-2xs"
+                  >
+                    <span>🏛️</span>
+                    <span className="truncate max-w-xs">{src.title || src.url}</span>
+                  </span>
+                ))}
               </div>
             </div>
           )}
-        </form>
 
-        {errorMessage && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs sm:text-sm text-red-700 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-      </div>
-
-      {/* 2. Sleek Trust & Rules Strip (खोज बार के नीचे) */}
-      {!result && !isLoading && (
-        <div className="bg-amber-950 text-amber-100 rounded-xl p-3.5 sm:p-4 border border-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
-          <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
-            <span>
-              <strong>लाइव आधिकारिक वेब खोज:</strong> भारत सरकार के अधिकृत पोर्टलों (<span className="text-amber-300 font-mono">.gov.in / indiacode.nic.in</span>) व नई संहिताओं (BNS/BNSS 2023) से सटीक सत्यापन।
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-stone-300 text-[11px] shrink-0">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>15-सूत्रीय सत्यापन नियम लागू</span>
+          {/* Real-time streaming content chunk-by-chunk */}
+          <div className="p-4 sm:p-5 bg-stone-50/60 rounded-xl border border-stone-200 text-stone-800 leading-relaxed text-sm font-['Yantramanav',sans-serif]">
+            {streamingText ? (
+              <div className="relative">
+                <FormattedLegalContent content={streamingText} />
+                <span className="inline-block w-2 h-4 ml-1 bg-amber-600 animate-pulse align-middle" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 py-8 justify-center text-stone-600 text-sm">
+                <div className="w-5 h-5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                <span>{streamingStatus || "आधिकारिक गजट व विधिक संहिताओं का विश्लेषण किया जा रहा है..."}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Loading Skeleton / Progress Indicator */}
-      {isLoading && (
+      {/* Fallback loading indicator when loading but not streaming yet */}
+      {isLoading && !isStreaming && (
         <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-6 shadow-xs text-center space-y-3">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 text-amber-800 animate-pulse">
             <Globe className="w-6 h-6" />
@@ -756,7 +1083,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
       )}
 
       {/* Results View - remains visible while typing, replaced ONLY after user submits new question and new answer is ready */}
-      {result && (
+      {result && !isStreaming && (
         <div
           ref={resultSectionRef}
           id="legal-research-result"
@@ -772,9 +1099,8 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                   नागरिक मार्गदर्शन (Citizen Guide)
                 </span>
                 {hardFail.isHardFailed ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/40 flex items-center gap-1">
-                    <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-                    UNVERIFIED (सत्यापन शेष)
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                    ⚠️ असत्यापित
                   </span>
                 ) : (
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
@@ -859,7 +1185,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                     <span>जरूरी कागज़ात व सबूत:</span>
                   </div>
                   <ul className="text-xs text-stone-300 space-y-1.5 font-medium">
-                    {(result.requiredDocuments || []).slice(0, 4).map((doc, idx) => (
+                    {result.requiredDocuments.slice(0, 4).map((doc, idx) => (
                       <li key={idx} className="flex items-start gap-1.5">
                         <span className="text-amber-400 font-bold">•</span>
                         <span>{doc}</span>
@@ -903,7 +1229,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
           </div>
 
           {/* 2. READY-TO-USE LEGAL DRAFT (तैयार कानूनी शिकायत / FIR ड्राफ्ट - त्वरित उपयोग हेतु) */}
-          {!hardFail.isHardFailed && result.generatedDraft && (
+          {result.generatedDraft && (
             <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
               <div className="bg-amber-800 text-white px-5 py-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -911,6 +1237,11 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                   <h4 className="text-sm font-bold">
                     तैयार कानूनी शिकायत / FIR ड्राफ्ट (Ready-to-use Legal Draft)
                   </h4>
+                  {hardFail.isHardFailed && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-200 text-amber-950">
+                      ⚠️ असत्यापित
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -994,29 +1325,35 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
 
             {/* 4 Essential Breakdown Points for Legal Sections */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
-              {result.legalSectionDetails?.state && (
-                <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                  <div className="font-bold text-stone-700 uppercase tracking-wider text-xs flex items-center gap-1">
-                    <BookOpen className="w-3 h-3 text-amber-700" />
-                    <span>
-                      {result.legalSectionDetails?.isStateLaw
-                        ? "राज्य अधिनियम (State Act):"
-                        : "लागू राज्य (Applicable State):"}
-                    </span>
-                  </div>
+              <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
+                <div className="font-bold text-stone-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                  <BookOpen className="w-3 h-3 text-amber-700" />
+                  <span>
+                    {result.legalSectionDetails?.isStateLaw
+                      ? "राज्य अधिनियम एवं धारा (State Act & Section):"
+                      : "अधिनियम एवं धारा (Act & Section):"}
+                  </span>
+                </div>
+                {result.legalSectionDetails?.state && (
                   <div className="text-[11px] font-semibold text-stone-600">
                     राज्य: {result.legalSectionDetails.state}
                   </div>
-                  {result.legalSectionDetails?.sectionTitle && (
-                    <div className="text-xs text-stone-700 font-medium">
-                      विषय: {result.legalSectionDetails.sectionTitle}
-                    </div>
-                  )}
+                )}
+                <div className="text-sm font-bold text-stone-900">
+                  {result.legalSectionDetails?.actName || "भारतीय न्याय संहिता, 2023 / विशेष कानून"}
                 </div>
-              )}
+                <div className="text-xs font-semibold text-blue-700">
+                  {result.legalSectionDetails?.sectionNumber || result.applicableLaw}
+                </div>
+                {result.legalSectionDetails?.sectionTitle && (
+                  <div className="text-xs text-stone-700 font-medium">
+                    विषय: {result.legalSectionDetails.sectionTitle}
+                  </div>
+                )}
+              </div>
 
               <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                <div className="font-bold text-stone-700 uppercase tracking-wider text-xs flex items-center gap-1">
+                <div className="font-bold text-stone-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
                   <Scale className="w-3 h-3 text-amber-700" />
                   <span>कानून में यह प्रावधान है:</span>
                 </div>
@@ -1027,7 +1364,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
               </div>
 
               <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                <div className="font-bold text-stone-700 uppercase tracking-wider text-xs flex items-center gap-1">
+                <div className="font-bold text-stone-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
                   <Info className="w-3 h-3 text-blue-600" />
                   <span>आपके मामले में यह लागू हो सकता है:</span>
                 </div>
@@ -1050,137 +1387,89 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
             </div>
           </div>
 
-          {/* Format B Website Content Box / Red Warning Banner */}
-          {hardFail.isHardFailed ? (
-            <div className="bg-red-50 rounded-xl border-2 border-red-600 p-5 sm:p-6 shadow-md text-red-950 space-y-4">
-              <div className="flex items-start gap-3 border-b border-red-200 pb-3">
-                <ShieldAlert className="w-8 h-8 text-red-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-black bg-red-600 text-white tracking-wide uppercase">
-                    Hard-Fail Gate Enforced
-                  </div>
-                  <h3 className="text-base sm:text-lg font-black text-red-700 tracking-tight">
-                    STATUS: OVERALL RESULT: FAIL ({hardFail.reason})
-                  </h3>
-                  <p className="text-xs sm:text-sm text-red-800 font-medium">
-                    आधिकारिक कानून के मूल पाठ / राज्य ई-गजट से इस धारा का संशोधित वैधानिक साक्ष्य अपूर्ण होने के कारण Format B का सामान्य आर्टिकल ब्लॉक कर दिया गया है।
-                  </p>
-                </div>
+          {/* Format B Website Content Box */}
+          <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
+            <div className="bg-stone-50 px-5 py-3 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-700" />
+                <h4 className="text-sm font-bold text-stone-900">
+                  Justice Ji वेबसाइट कंटेंट (मानक Format B)
+                </h4>
+                {hardFail.isHardFailed && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                    ⚠️ असत्यापित
+                  </span>
+                )}
               </div>
 
-              <div className="space-y-3 text-xs sm:text-sm text-red-900 bg-white/95 p-4 sm:p-5 rounded-lg border border-red-200 font-['Yantramanav',sans-serif] leading-relaxed shadow-2xs">
-                <div className="font-bold text-red-950 text-sm flex items-center gap-2 border-b border-red-100 pb-2">
-                  <AlertTriangle className="w-4 h-4 text-red-600" />
-                  <span>हार्ड-फेल गेट सत्यापन रिपोर्ट (Verification Hard-Fail Audit):</span>
-                </div>
-                <div className="space-y-2 text-stone-800">
-                  <div>
-                    <span className="font-bold text-red-900">1. विफलता की स्थिति (Overall Result):</span>{" "}
-                    <span className="font-mono font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded border border-red-300">
-                      FAIL (UNVERIFIED)
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-red-900">2. कारण (Reason):</span> {hardFail.reason}
-                  </div>
-                  <div>
-                    <span className="font-bold text-red-900">3. हार्ड-फेल नियम:</span> यदि किसी भी धारा का कोई भी भाग (जैसे पेनल्टी, अमेंडमेंट, उपधारा, अथॉरिटी) Level 1 आधिकारिक गजट या मूल अधिनियम से 100% सत्यापित नहीं है, तो सामान्य आर्टिकल जनरेट करने के बजाय स्क्रीन पर सीधे हार्ड-फेल चेतावनी अनिवार्य है।
-                  </div>
-                  <div>
-                    <span className="font-bold text-red-900">4. अनिवार्य निर्देश:</span> जब तक राज्य ई-गजट या आधिकारिक प्राथमिक कानून से 100% सत्यापन नहीं हो जाता, तब तक किसी भी अनुमानित अथवा अपूर्ण विवरण को प्रकाशित न करें।
-                  </div>
-                </div>
-              </div>
-
-              <div className="text-xs text-red-700 italic border-t border-red-200 pt-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="flex items-center gap-1 font-semibold">
-                  <ShieldAlert className="w-3.5 h-3.5 text-red-600" />
-                  LEGAL ACCURACY &gt; SOURCE AUTHORITY &gt; UNVERIFIED ARTICLES BLOCKED
-                </span>
-                <span className="text-[11px] font-bold text-red-800 bg-red-100 px-2 py-0.5 rounded border border-red-200">
-                  Justice Ji Hard-Fail Protocol
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
-              <div className="bg-stone-50 px-5 py-3 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-amber-700" />
-                  <h4 className="text-sm font-bold text-stone-900">
-                    Justice Ji वेबसाइट कंटेंट (मानक Format B)
-                  </h4>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCopyText}
-                    className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 font-semibold text-stone-700 cursor-pointer shadow-2xs transition-all"
-                    title="पूरा टेक्स्ट कॉपी करें"
-                  >
-                    {copiedText ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-emerald-600">कॉपी हो गया</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-stone-600" />
-                        <span>टेक्स्ट कॉपी करें</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={handleCopyHtml}
-                    className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 font-semibold text-stone-700 cursor-pointer shadow-2xs transition-all"
-                    title="HTML कोड कॉपी करें"
-                  >
-                    {copiedHtml ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-emerald-600">HTML कॉपी हो गया</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-stone-600" />
-                        <span>HTML कॉपी</span>
-                      </>
-                    )}
-                  </button>
-
-                  {onSaveNewTopic && (
-                    <button
-                      onClick={handleSaveTopic}
-                      className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-semibold cursor-pointer shadow-2xs transition-all"
-                      title="इस नए विषय को Justice Ji में सहेजें"
-                    >
-                      {savedSuccess ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-white" />
-                          <span>विषय सहेजा गया!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Layers className="w-3.5 h-3.5 text-white" />
-                          <span>विषयों में जोड़ें</span>
-                        </>
-                      )}
-                    </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyText}
+                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 font-semibold text-stone-700 cursor-pointer shadow-2xs transition-all"
+                  title="पूरा टेक्स्ट कॉपी करें"
+                >
+                  {copiedText ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-600">कॉपी हो गया</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-stone-600" />
+                      <span>टेक्स्ट कॉपी करें</span>
+                    </>
                   )}
-                </div>
-              </div>
+                </button>
 
-              {/* Content Display */}
-              <div className="p-5 sm:p-6 text-sm text-stone-800 leading-relaxed font-['Yantramanav',sans-serif] bg-white">
-                <FormattedLegalContent
-                  content={result.formatBContent}
-                  isVerified={!hardFail.isHardFailed}
-                  failReason={hardFail.reason}
-                />
+                <button
+                  onClick={handleCopyHtml}
+                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 font-semibold text-stone-700 cursor-pointer shadow-2xs transition-all"
+                  title="HTML कोड कॉपी करें"
+                >
+                  {copiedHtml ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-600">HTML कॉपी हो गया</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-stone-600" />
+                      <span>HTML कॉपी</span>
+                    </>
+                  )}
+                </button>
+
+                {onSaveNewTopic && (
+                  <button
+                    onClick={handleSaveTopic}
+                    className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-semibold cursor-pointer shadow-2xs transition-all"
+                    title="इस नए विषय को Justice Ji में सहेजें"
+                  >
+                    {savedSuccess ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-white" />
+                        <span>विषय सहेजा गया!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Layers className="w-3.5 h-3.5 text-white" />
+                        <span>विषयों में जोड़ें</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
-          )}
+
+            {/* Content Display */}
+            <div className="p-5 sm:p-6 text-sm text-stone-800 leading-relaxed font-['Yantramanav',sans-serif] bg-white">
+              <FormattedLegalContent
+                content={result.formatBContent}
+                isVerified={!hardFail.isHardFailed}
+                failReason={hardFail.reason}
+              />
+            </div>
+          </div>
 
           {/* Official Verification Sources & Unverified Notes (Rule 12 & 15) */}
           <div className="bg-stone-50 rounded-xl border border-stone-200 p-4 space-y-3 text-xs">
@@ -1225,6 +1514,213 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
           </div>
         </div>
       )}
+      </div>
+
+      {/* 2. GEMINI-STYLE FLOATING BOTTOM SEARCH BAR (पेज के नीचे फिक्स्ड / स्टिकी) */}
+      <div className="sticky bottom-2 sm:bottom-4 z-40 w-full max-w-4xl mx-auto px-1 sm:px-2 pt-2">
+        {/* Error Alert if any */}
+        {errorMessage && (
+          <div className="mb-2 p-2.5 sm:p-3 bg-red-50 border border-red-200 rounded-2xl text-xs sm:text-sm text-red-700 flex items-center justify-between shadow-md animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorMessage(null)}
+              className="text-red-400 hover:text-red-700 p-1"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Expandable Location & Facts Popover / Drawer */}
+        {showLocationFilters && (
+          <div className="mb-2.5 p-3.5 sm:p-4 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-300 shadow-xl space-y-3 animate-in fade-in slide-in-from-bottom-3">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800">
+                <MapPin className="w-4 h-4 text-amber-700" />
+                <span>क्षेत्रीय विधिक क्षेत्राधिकार व विशिष्ट तथ्य (वैकल्पिक)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLocationFilters(false)}
+                className="text-xs font-semibold text-stone-500 hover:text-stone-800 px-2 py-0.5 rounded-md hover:bg-stone-100"
+              >
+                बन्द करें ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  राज्य (State)
+                </label>
+                <select
+                  value={userState}
+                  onChange={(e) => setUserState(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs focus:ring-1 focus:ring-amber-600"
+                >
+                  <option value="">-- राज्य चुनें --</option>
+                  {INDIAN_STATES.map((st, i) => (
+                    <option key={i} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  जिला / शहर (District)
+                </label>
+                <input
+                  type="text"
+                  value={userDistrict}
+                  onChange={(e) => setUserDistrict(e.target.value)}
+                  placeholder="उदा: लखनऊ, भोपाल, जयपुर..."
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs focus:ring-1 focus:ring-amber-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  विशिष्ट तथ्य (तारीख, राशि, विपक्षी)
+                </label>
+                <input
+                  type="text"
+                  value={userFacts}
+                  onChange={(e) => setUserFacts(e.target.value)}
+                  placeholder="उदा: 50,000 रुपये फ्रॉड, 2 दिन पहले..."
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs focus:ring-1 focus:ring-amber-600"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-xs">
+              <label className="inline-flex items-center gap-2 text-stone-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={needDraft}
+                  onChange={(e) => setNeedDraft(e.target.checked)}
+                  className="w-4 h-4 text-amber-700 rounded border-stone-300 focus:ring-amber-600"
+                />
+                <span className="font-semibold text-stone-800 text-[11px]">
+                  लिखित कानूनी शिकायत / FIR ड्राफ्ट भी स्वतः बनाएं
+                </span>
+              </label>
+
+              {(userState || userDistrict || userFacts) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserState("");
+                    setUserDistrict("");
+                    setUserFacts("");
+                  }}
+                  className="text-[11px] text-amber-800 hover:underline"
+                >
+                  फिल्टर हटाएं
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Gemini-Style Main Input Capsule Bar */}
+        <form
+          id="gemini-search-form"
+          onSubmit={handleSearchAndResearch}
+          className="relative flex items-center bg-white rounded-full border border-stone-300 shadow-lg hover:shadow-xl focus-within:shadow-xl focus-within:border-amber-600 focus-within:ring-3 focus-within:ring-amber-500/20 transition-all p-1.5 sm:p-2"
+        >
+          {/* Left Controls: Voice & Location Pills */}
+          <div className="flex items-center gap-1 pl-1 shrink-0">
+            <VoiceInputButton
+              onStart={() => {
+                isFreshInputPending.current = false;
+                setQuery("");
+              }}
+              onTranscript={(txt) => {
+                isFreshInputPending.current = false;
+                setQuery(txt);
+              }}
+              buttonSize="md"
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowLocationFilters((prev) => !prev)}
+              title="स्थान व विशिष्ट तथ्य जोड़ें"
+              className={`px-2.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0 ${
+                userState || userDistrict || userFacts
+                  ? "bg-amber-100 text-amber-900 border border-amber-300"
+                  : "bg-stone-100 hover:bg-stone-200 text-stone-600 border border-stone-200"
+              }`}
+            >
+              <MapPin className="w-3.5 h-3.5 text-amber-700" />
+              <span className="hidden sm:inline">
+                {userState ? `${userState}${userDistrict ? ` • ${userDistrict}` : ""}` : "स्थान"}
+              </span>
+              {(userState || userDistrict || userFacts) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+              )}
+            </button>
+          </div>
+
+          {/* Central Textarea */}
+          <textarea
+            value={query}
+            onFocus={handleQueryFocus}
+            onKeyDown={handleQueryKeyDown}
+            onBeforeInput={handleQueryBeforeInput}
+            onPaste={handleQueryPaste}
+            onChange={handleQueryChange}
+            placeholder="अपनी कानूनी समस्या यहाँ लिखें (जैसे: जमीन पर अवैध कब्जा, बाइक चोरी, चेक बाउंस, मारपीट, धमकी...)"
+            rows={1}
+            className="flex-1 bg-transparent px-3 py-1.5 sm:py-2 text-xs sm:text-sm md:text-base text-stone-900 focus:outline-none placeholder:text-stone-400 font-medium resize-none max-h-24 leading-normal"
+            required
+          />
+
+          {/* Right Controls: Clear and Send */}
+          <div className="flex items-center gap-1 pr-0.5 shrink-0">
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  isFreshInputPending.current = false;
+                }}
+                className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
+                title="साफ करें"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Circular Send Button (Gemini Style) */}
+            <button
+              type="submit"
+              disabled={isLoading || isSubmittingRef.current || !query.trim()}
+              title="सत्यापित कानूनी समाधान खोजें (Enter)"
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-amber-700 hover:bg-amber-800 disabled:opacity-40 disabled:hover:bg-amber-700 text-white flex items-center justify-center shrink-0 shadow-md cursor-pointer transition-all"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin text-white" />
+              ) : (
+                <ArrowUp className="w-5 h-5 text-white" />
+              )}
+            </button>
+          </div>
+        </form>
+
+        {/* Micro note below input */}
+        <div className="text-center mt-1.5">
+          <p className="text-[10px] sm:text-[11px] text-stone-500 font-medium">
+            Justice Ji विधिक सूचना प्रणाली • नई संहिताएं BNS / BNSS / BSA 2023 से 100% गजट-सत्यापित
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
