@@ -6,11 +6,12 @@ import { DraftGenerator } from "./components/DraftGenerator";
 import { LegalAssistantChat } from "./components/LegalAssistantChat";
 import { VerifiedHelplines } from "./components/VerifiedHelplines";
 import { LawConverter } from "./components/LawConverter";
+import { LegalDictionary } from "./components/LegalDictionary";
 import { DisclaimerFooter } from "./components/DisclaimerFooter";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    "websearch" | "generator" | "drafts" | "chat" | "helplines" | "laws"
+    "websearch" | "generator" | "drafts" | "chat" | "helplines" | "laws" | "dictionary"
   >("websearch");
 
   const [activeDraftContent, setActiveDraftContent] = useState<string | undefined>(undefined);
@@ -66,6 +67,7 @@ export default function App() {
         )}
         {activeTab === "helplines" && <VerifiedHelplines />}
         {activeTab === "laws" && <LawConverter />}
+        {activeTab === "dictionary" && <LegalDictionary />}
       </main>
 
       {/* Footer with Legal Disclaimer */}
