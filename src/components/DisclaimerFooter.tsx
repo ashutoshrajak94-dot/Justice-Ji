@@ -1,9 +1,12 @@
 import React from "react";
-import { Scale, ShieldAlert, ExternalLink, Heart } from "lucide-react";
+import { Scale, ShieldAlert, ExternalLink } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
 export const DisclaimerFooter: React.FC = () => {
+  const { t } = useLanguage();
+
   return (
-    <footer className="mt-12 border-t border-stone-200 bg-stone-900 text-stone-300 py-8 px-4 sm:px-6 lg:px-8">
+    <footer className="mt-12 border-t border-stone-200 dark:border-stone-800 bg-stone-900 text-stone-300 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Legal Disclaimer Box */}
         <div className="bg-stone-800/80 border border-stone-700/80 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row items-start gap-4">
@@ -12,13 +15,13 @@ export const DisclaimerFooter: React.FC = () => {
           </div>
           <div className="text-xs sm:text-sm text-stone-300 leading-relaxed space-y-1">
             <h4 className="font-bold text-amber-400 text-sm">
-              वैधानिक अस्वीकरण (Legal Disclaimer - नियम A8 व A7):
+              {t("footerDisclaimerTitle")}
             </h4>
             <p>
-              &ldquo;Justice Ji&rdquo; केवल भारत के आम नागरिकों और कानूनी कंटेंट राइटर्स के लिए <strong>सामान्य कानूनी जानकारी, धाराएं व शिकायत प्रारूप</strong> उपलब्ध कराता है। यह किसी न्यायालय या अधिवक्ता द्वारा दी जाने वाली <strong>व्यक्तिगत कानूनी सलाह (Legal Advice) का विकल्प नहीं है</strong>।
+              {t("footerDisclaimerText")}
             </p>
             <p className="text-stone-400 text-xs">
-              प्रत्येक मामले की परिस्थितियां, स्थान, साक्ष्य और समय सीमा भिन्न हो सकती हैं। किसी भी विधिक कार्यवाही, एफआईआर या मुकदमे से पूर्व अपने स्थानीय पंजीकृत अधिवक्ता (Advocate) या जिला विधिक सेवा प्राधिकरण (DLSA / NALSA हेल्पलाइन: 15100) से परामर्श अवश्य लें।
+              {t("footerHelplineText")}
             </p>
           </div>
         </div>
