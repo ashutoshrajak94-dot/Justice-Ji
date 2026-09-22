@@ -9,12 +9,13 @@ import {
   Globe,
   Sparkles,
   Search,
+  BookA,
 } from "lucide-react";
 
 interface HeaderProps {
-  activeTab: "generator" | "websearch" | "drafts" | "chat" | "helplines" | "laws";
+  activeTab: "generator" | "websearch" | "drafts" | "chat" | "helplines" | "laws" | "dictionary";
   setActiveTab: (
-    tab: "generator" | "websearch" | "drafts" | "chat" | "helplines" | "laws"
+    tab: "generator" | "websearch" | "drafts" | "chat" | "helplines" | "laws" | "dictionary"
   ) => void;
 }
 
@@ -42,7 +43,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               </p>
             </div>
           </div>
-
           <div className="flex items-center gap-2 text-xs text-stone-500 bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span className="font-semibold text-stone-700">वर्तमान कानून:</span>
@@ -66,7 +66,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               Live .gov.in
             </span>
           </button>
-
           <button
             onClick={() => setActiveTab("generator")}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
@@ -78,7 +77,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <FileText className="w-4 h-4" />
             वेबसाइट कंटेंट (Format B)
           </button>
-
           <button
             onClick={() => setActiveTab("drafts")}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
@@ -90,7 +88,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <Scale className="w-4 h-4" />
             शिकायत / FIR ड्राफ्ट्स
           </button>
-
           <button
             onClick={() => setActiveTab("chat")}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
@@ -102,7 +99,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <MessageSquareQuote className="w-4 h-4" />
             कानूनी सवाल पूछें (Q&A)
           </button>
-
           <button
             onClick={() => setActiveTab("helplines")}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
@@ -114,7 +110,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <PhoneCall className="w-4 h-4" />
             सत्यापित सरकारी हेल्पलाइन (Official)
           </button>
-
           <button
             onClick={() => setActiveTab("laws")}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
@@ -126,9 +121,22 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <BookOpen className="w-4 h-4" />
             नए कानून vs पुराने कानून (BNS तालिका)
           </button>
+          <button
+            onClick={() => setActiveTab("dictionary")}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+              activeTab === "dictionary"
+                ? "bg-amber-700 text-white shadow-xs"
+                : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
+            }`}
+          >
+            <BookA className="w-4 h-4" />
+            <span>कानूनी शब्दकोश (Dictionary)</span>
+            <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded-full font-bold border border-amber-300">
+              15 मुख्य शब्द
+            </span>
+          </button>
         </nav>
       </div>
     </header>
   );
 };
-
