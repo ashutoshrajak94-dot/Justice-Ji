@@ -14,6 +14,7 @@ import {
   X,
   ExternalLink,
 } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
 export type NavTab =
   | "websearch"
@@ -41,6 +42,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   setIsCollapsed,
 }) => {
+  const { t } = useLanguage();
+
   const navItems: Array<{
     id: NavTab;
     label: string;
@@ -51,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }> = [
     {
       id: "websearch",
-      label: "AI कानूनी खोज",
+      label: t("navWebSearch"),
       englishLabel: "Legal Search",
       icon: <Search className="w-5 h-5 shrink-0" />,
       badge: "Live .gov.in",
@@ -59,7 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: "generator",
-      label: "वेबसाइट कंटेंट",
+      label: t("navGenerator"),
       englishLabel: "Format B Generator",
       icon: <Sparkles className="w-5 h-5 shrink-0" />,
       badge: "5 नियम",
@@ -67,7 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: "drafts",
-      label: "शिकायत / FIR ड्राफ्ट",
+      label: t("navDrafts"),
       englishLabel: "Legal Drafts",
       icon: <FileText className="w-5 h-5 shrink-0" />,
       badge: "PDF/प्रिंट",
@@ -75,13 +78,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: "chat",
-      label: "कानूनी सवाल-जवाब",
+      label: t("navChat"),
       englishLabel: "Q&A Legal Chat",
       icon: <MessageSquareQuote className="w-5 h-5 shrink-0" />,
     },
     {
       id: "dictionary",
-      label: "कानूनी शब्दकोश",
+      label: t("navDictionary"),
       englishLabel: "Legal Dictionary",
       icon: <BookA className="w-5 h-5 shrink-0" />,
       badge: "15 शब्द",
@@ -89,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: "helplines",
-      label: "सत्यापित हेल्पलाइन",
+      label: t("navHelplines"),
       englishLabel: "Helplines & Portals",
       icon: <PhoneCall className="w-5 h-5 shrink-0" />,
       badge: "1930/112",
@@ -97,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: "laws",
-      label: "नए कानून vs पुराने",
+      label: t("navLaws"),
       englishLabel: "BNS vs IPC Table",
       icon: <BookOpen className="w-5 h-5 shrink-0" />,
     },
@@ -112,13 +115,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className="flex flex-col h-full bg-stone-900 text-stone-200 select-none border-r border-stone-800">
       {/* Brand Header */}
       <div className="p-4 border-b border-stone-800 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-md">
+        <div 
+          onClick={() => handleSelectTab("websearch")}
+          className="flex items-center gap-3 overflow-hidden cursor-pointer group"
+          title="Justice Ji होम पेज"
+        >
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-700 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-md group-hover:scale-105 transition-transform">
             <Scale className="w-5 h-5" />
           </div>
           {(!isCollapsed || mobileOpen) && (
             <div className="leading-tight truncate">
-              <h1 className="text-xl font-black text-amber-50 font-['Rozha_One',serif] tracking-wide flex items-center gap-1.5">
+              <h1 className="text-xl font-black text-amber-50 font-['Rozha_One',serif] tracking-wide flex items-center gap-1.5 group-hover:text-amber-300 transition-colors">
                 Justice Ji
                 <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-sans font-bold border border-amber-500/30">
                   AI
