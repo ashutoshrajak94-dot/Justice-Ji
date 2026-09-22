@@ -123,3 +123,21 @@ export interface LegalResearchResult {
   generatedDraft?: string;
   isNewTopic: boolean;
 }
+export interface LegalDictionaryTerm {
+  id: string;
+  hindiTerm: string;
+  englishTerm: string;
+  pronunciationOrLatin?: string;
+  category: "criminal" | "procedure" | "court" | "civil" | "rights";
+  categoryName: string;
+  applicableLaw: string;
+  section: string;
+  subject: string;
+  condition: string;
+  punishment?: string;
+  fine?: string;
+  simpleMeaning: string;
+  practicalExample: string;
+  citizenRightTip?: string;
+  relatedTerms?: string[];
+}
