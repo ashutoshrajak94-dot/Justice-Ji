@@ -9,8 +9,11 @@ import { VerifiedHelplines } from "./components/VerifiedHelplines";
 import { LawConverter } from "./components/LawConverter";
 import { LegalDictionary } from "./components/LegalDictionary";
 import { DisclaimerFooter } from "./components/DisclaimerFooter";
+import { ThemeProvider } from "./context/ThemeContext";
+import { LanguageProvider } from "./context/LanguageContext";
+import { LanguageSelectionModal } from "./components/LanguageSelectionModal";
 
-export default function App() {
+function MainApp() {
   const [activeTab, setActiveTab] = useState<NavTab>("websearch");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -38,8 +41,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-100 flex font-sans text-stone-900">
+    <div className="min-h-screen bg-stone-100 dark:bg-stone-950 flex font-sans text-stone-900 dark:text-stone-100 transition-colors duration-200">
       {/* 1. Left Sidebar Navigation (ChatGPT / Gemini style) */}
+      <LanguageSelectionModal />
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -55,7 +59,7 @@ export default function App() {
           isSidebarCollapsed ? "lg:pl-18" : "lg:pl-64"
         }`}
       >
-        {/* Sleek Top Header (without horizontal tabs) */}
+        {/* Sleek Top Header with Centered Large Logo & Dark/Light Toggle */}
         <Header
           activeTab={activeTab}
           setActiveTab={setActiveTab}
@@ -95,5 +99,15 @@ export default function App() {
         <DisclaimerFooter />
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <LanguageProvider>
+        <MainApp />
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
