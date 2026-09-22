@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Sidebar, NavTab } from "./components/Sidebar";
 import { Header } from "./components/Header";
 import { ContentGenerator } from "./components/ContentGenerator";
 import { LegalWebSearch } from "./components/LegalWebSearch";
@@ -10,9 +11,9 @@ import { LegalDictionary } from "./components/LegalDictionary";
 import { DisclaimerFooter } from "./components/DisclaimerFooter";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<
-    "websearch" | "generator" | "drafts" | "chat" | "helplines" | "laws" | "dictionary"
-  >("websearch");
+  const [activeTab, setActiveTab] = useState<NavTab>("websearch");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
   const [activeDraftContent, setActiveDraftContent] = useState<string | undefined>(undefined);
   const [activeDraftType, setActiveDraftType] = useState<string | undefined>(undefined);
@@ -37,42 +38,62 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-100 flex flex-col font-sans text-stone-900">
-      {/* Header with Navigation */}
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+    <div className="min-h-screen bg-stone-100 flex font-sans text-stone-900">
+      {/* 1. Left Sidebar Navigation (ChatGPT / Gemini style) */}
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        mobileOpen={mobileSidebarOpen}
+        setMobileOpen={setMobileSidebarOpen}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
+      />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === "generator" && (
-          <ContentGenerator
-            onGoToWebSearch={() => setActiveTab("websearch")}
-            savedTopics={savedTopics}
-          />
-        )}
-        {activeTab === "websearch" && (
-          <LegalWebSearch
-            onOpenDraft={handleOpenDraft}
-            onSaveNewTopic={handleSaveNewTopic}
-          />
-        )}
-        {activeTab === "drafts" && (
-          <DraftGenerator
-            key={activeDraftType || "draft-default"}
-            initialDraft={activeDraftContent}
-            initialTemplate={activeDraftType}
-          />
-        )}
-        {activeTab === "chat" && (
-          <LegalAssistantChat onOpenDraft={handleOpenDraft} />
-        )}
-        {activeTab === "helplines" && <VerifiedHelplines />}
-        {activeTab === "laws" && <LawConverter />}
-        {activeTab === "dictionary" && <LegalDictionary />}
-      </main>
+      {/* 2. Main Right Content Area */}
+      <div
+        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${
+          isSidebarCollapsed ? "lg:pl-18" : "lg:pl-64"
+        }`}
+      >
+        {/* Sleek Top Header (without horizontal tabs) */}
+        <Header
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
+        />
 
-      {/* Footer with Legal Disclaimer */}
-      <DisclaimerFooter />
+        {/* Content Tabs Area */}
+        <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5">
+          {activeTab === "generator" && (
+            <ContentGenerator
+              onGoToWebSearch={() => setActiveTab("websearch")}
+              savedTopics={savedTopics}
+            />
+          )}
+          {activeTab === "websearch" && (
+            <LegalWebSearch
+              onOpenDraft={handleOpenDraft}
+              onSaveNewTopic={handleSaveNewTopic}
+            />
+          )}
+          {activeTab === "drafts" && (
+            <DraftGenerator
+              key={activeDraftType || "draft-default"}
+              initialDraft={activeDraftContent}
+              initialTemplate={activeDraftType}
+            />
+          )}
+          {activeTab === "chat" && (
+            <LegalAssistantChat onOpenDraft={handleOpenDraft} />
+          )}
+          {activeTab === "helplines" && <VerifiedHelplines />}
+          {activeTab === "laws" && <LawConverter />}
+          {activeTab === "dictionary" && <LegalDictionary />}
+        </main>
+
+        {/* Footer with Legal Disclaimer */}
+        <DisclaimerFooter />
+      </div>
     </div>
   );
 }
-
