@@ -1,141 +1,153 @@
 import React from "react";
 import {
-  Scale,
+  Menu,
   ShieldCheck,
-  FileText,
-  PhoneCall,
-  MessageSquareQuote,
-  BookOpen,
-  Globe,
+  Scale,
   Sparkles,
+  PhoneCall,
   Search,
   BookA,
+  FileText,
+  MessageSquareQuote,
+  BookOpen,
 } from "lucide-react";
+import { NavTab } from "./Sidebar";
 
 interface HeaderProps {
-  activeTab: "generator" | "websearch" | "drafts" | "chat" | "helplines" | "laws" | "dictionary";
-  setActiveTab: (
-    tab: "generator" | "websearch" | "drafts" | "chat" | "helplines" | "laws" | "dictionary"
-  ) => void;
+  activeTab: NavTab;
+  setActiveTab: (tab: NavTab) => void;
+  onOpenMobileSidebar: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
+export const Header: React.FC<HeaderProps> = ({
+  activeTab,
+  setActiveTab,
+  onOpenMobileSidebar,
+}) => {
+  const getTabInfo = () => {
+    switch (activeTab) {
+      case "websearch":
+        return {
+          title: "AI कानूनी खोज (Legal Search)",
+          subtitle: "सरल हिंदी में समस्या लिखें • BNS 2023 से सटीक धारा व समाधान",
+          icon: <Search className="w-5 h-5 text-amber-700" />,
+        };
+      case "generator":
+        return {
+          title: "वेबसाइट कंटेंट जनरेटर (Format B)",
+          subtitle: "5 अनिवार्य नियमों के साथ आधिकारिक वेब पोर्टल व धाराएं",
+          icon: <Sparkles className="w-5 h-5 text-amber-700" />,
+        };
+      case "drafts":
+        return {
+          title: "शिकायत / FIR / लीगल नोटिस ड्राफ्ट",
+          subtitle: "कोर्ट व थाने में जमा करने योग्य प्रामाणिक कानूनी प्रारूप",
+          icon: <FileText className="w-5 h-5 text-amber-700" />,
+        };
+      case "chat":
+        return {
+          title: "कानूनी सवाल-जवाब (Legal Assistant Chat)",
+          subtitle: "तत्काल विधिक परामर्श व अधिकारों की जानकारी",
+          icon: <MessageSquareQuote className="w-5 h-5 text-amber-700" />,
+        };
+      case "dictionary":
+        return {
+          title: "कानूनी शब्दकोश (Legal Dictionary)",
+          subtitle: "15 मुख्य कानूनी शब्दों का प्रामाणिक व सरल संग्रह",
+          icon: <BookA className="w-5 h-5 text-amber-700" />,
+        };
+      case "helplines":
+        return {
+          title: "सत्यापित सरकारी हेल्पलाइन व पोर्टल्स",
+          subtitle: "1930 साइबर, 112 आपातकालीन, 1915 उपभोक्ता व e-Daakhil",
+          icon: <PhoneCall className="w-5 h-5 text-amber-700" />,
+        };
+      case "laws":
+        return {
+          title: "नए कानून vs पुराने कानून (BNS तालिका)",
+          subtitle: "IPC, CrPC, IEA के स्थान पर BNS, BNSS, BSA की तुलना",
+          icon: <BookOpen className="w-5 h-5 text-amber-700" />,
+        };
+      default:
+        return {
+          title: "Justice Ji कानूनी सहायक",
+          subtitle: "सत्यापित भारतीय विधिक पोर्टल",
+          icon: <Scale className="w-5 h-5 text-amber-700" />,
+        };
+    }
+  };
+
+  const tabInfo = getTabInfo();
+
   return (
-    <header className="border-b border-stone-200 bg-white sticky top-0 z-40 shadow-xs">
+    <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-2xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between py-4 gap-4">
+        <div className="flex items-center justify-between h-16 gap-3">
+          {/* Left: Mobile Hamburger & Page Title */}
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-amber-700 text-amber-50 flex items-center justify-center shadow-xs">
-              <Scale className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black tracking-tight text-stone-900 font-['Rozha_One',serif]">
-                  Justice Ji <span className="text-amber-700 text-lg font-['Yantramanav',sans-serif] font-bold">जस्टिस जी</span>
-                </h1>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  सत्यापित कानूनी सहायक
-                </span>
+            <button
+              onClick={onOpenMobileSidebar}
+              className="lg:hidden p-2 rounded-xl text-stone-700 hover:bg-stone-100 hover:text-stone-900 transition-colors"
+              aria-label="मेनू खोलें"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            {/* Mobile Brand */}
+            <div className="flex lg:hidden items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-700 text-white flex items-center justify-center shadow-xs">
+                <Scale className="w-4 h-4" />
               </div>
-              <p className="text-xs sm:text-sm text-stone-600 font-medium">
-                भारत के नागरिकों के लिए आसान, स्पष्ट व वर्तमान कानून (BNS/BNSS) आधारित कानूनी जानकारी एवं शिकायत ड्राफ्ट्स
-              </p>
+              <span className="font-bold text-stone-900 font-['Rozha_One',serif] text-lg">
+                Justice Ji
+              </span>
+            </div>
+
+            {/* Desktop Active View Title & Breadcrumb */}
+            <div className="hidden lg:flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shadow-2xs">
+                {tabInfo.icon}
+              </div>
+              <div>
+                <h1 className="text-base font-bold text-stone-900 leading-tight">
+                  {tabInfo.title}
+                </h1>
+                <p className="text-xs text-stone-500 font-medium">
+                  {tabInfo.subtitle}
+                </p>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-stone-500 bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="font-semibold text-stone-700">वर्तमान कानून:</span>
-            <span>BNS 2023 • BNSS 2023 • BSA 2023 लागू</span>
+
+          {/* Right: Status Indicators & Quick Actions */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>BNS 2023 • Live .gov.in</span>
+            </div>
+
+            {activeTab !== "websearch" && (
+              <button
+                onClick={() => setActiveTab("websearch")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold transition-all shadow-xs"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>नई कानूनी खोज</span>
+              </button>
+            )}
+
+            {activeTab !== "helplines" && (
+              <button
+                onClick={() => setActiveTab("helplines")}
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold transition-all border border-stone-200"
+              >
+                <PhoneCall className="w-3.5 h-3.5 text-stone-600" />
+                <span>हेल्पलाइन (1930 / 112)</span>
+              </button>
+            )}
           </div>
         </div>
-
-        {/* Navigation Tabs */}
-        <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar border-t border-stone-100 pt-1 pb-2">
-          <button
-            onClick={() => setActiveTab("websearch")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap relative ${
-              activeTab === "websearch"
-                ? "bg-amber-700 text-white shadow-xs"
-                : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
-            }`}
-          >
-            <Search className="w-4 h-4" />
-            <span>AI कानूनी खोज (Search)</span>
-            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full font-bold border border-emerald-300">
-              Live .gov.in
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveTab("generator")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === "generator"
-                ? "bg-amber-700 text-white shadow-xs"
-                : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            वेबसाइट कंटेंट (Format B)
-          </button>
-          <button
-            onClick={() => setActiveTab("drafts")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === "drafts"
-                ? "bg-amber-700 text-white shadow-xs"
-                : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
-            }`}
-          >
-            <Scale className="w-4 h-4" />
-            शिकायत / FIR ड्राफ्ट्स
-          </button>
-          <button
-            onClick={() => setActiveTab("chat")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === "chat"
-                ? "bg-amber-700 text-white shadow-xs"
-                : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
-            }`}
-          >
-            <MessageSquareQuote className="w-4 h-4" />
-            कानूनी सवाल पूछें (Q&A)
-          </button>
-          <button
-            onClick={() => setActiveTab("helplines")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === "helplines"
-                ? "bg-amber-700 text-white shadow-xs"
-                : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
-            }`}
-          >
-            <PhoneCall className="w-4 h-4" />
-            सत्यापित सरकारी हेल्पलाइन (Official)
-          </button>
-          <button
-            onClick={() => setActiveTab("laws")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === "laws"
-                ? "bg-amber-700 text-white shadow-xs"
-                : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            नए कानून vs पुराने कानून (BNS तालिका)
-          </button>
-          <button
-            onClick={() => setActiveTab("dictionary")}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === "dictionary"
-                ? "bg-amber-700 text-white shadow-xs"
-                : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
-            }`}
-          >
-            <BookA className="w-4 h-4" />
-            <span>कानूनी शब्दकोश (Dictionary)</span>
-            <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded-full font-bold border border-amber-300">
-              15 मुख्य शब्द
-            </span>
-          </button>
-        </nav>
       </div>
     </header>
   );
