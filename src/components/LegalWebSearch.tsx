@@ -31,6 +31,7 @@ import {
 import { LegalResearchResult } from "../types";
 import { VoiceInputButton } from "./VoiceInputButton";
 import { LegalSectionDisplay, FormattedLegalContent } from "./LegalTextFormatter";
+import { useLanguage, SUPPORTED_LANGUAGES } from "../context/LanguageContext";
 
 const POPULAR_NOVEL_QUERIES = [
   {
@@ -442,6 +443,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
   onOpenDraft,
   onSaveNewTopic,
 }) => {
+  const { currentLanguage, setLanguageByCode, t } = useLanguage();
   const [query, setQuery] = useState<string>("");
   const [userState, setUserState] = useState<string>("");
   const [userDistrict, setUserDistrict] = useState<string>("");
@@ -672,6 +674,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
           district: userDistrict.trim(),
           userFacts: userFacts.trim(),
           generateDraft: needDraft,
+          language: currentLanguage.code,
         }),
         signal: controller.signal,
       });
@@ -933,22 +936,22 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
           <div className="space-y-6 pt-2 sm:pt-6 animate-in fade-in duration-300">
             {/* Center Greeting & Identity */}
             <div className="text-center max-w-2xl mx-auto space-y-3 px-2">
-              <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-700 text-amber-50 shadow-md mb-1 ring-4 ring-amber-100">
+              <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-700 text-amber-50 shadow-md mb-1 ring-4 ring-amber-100 dark:ring-amber-950/60">
                 <Scale className="w-8 h-8 sm:w-9 sm:h-9" />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight font-serif">
-                नमस्ते! आपकी किस कानूनी समस्या में मदद करें?
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 dark:text-white tracking-tight font-serif">
+                {t("heroGreeting")}
               </h1>
-              <p className="text-xs sm:text-sm text-stone-600 leading-relaxed font-medium">
-                भारतीय न्याय संहिता (BNS 2023), BNSS और भारतीय कानूनों पर 100% आधिकारिक गजट-सत्यापित विधिक सहायता। धारा या जटिल कानूनी शब्द जानने की ज़रूरत नहीं — अपनी सामान्य बोलचाल की भाषा में समस्या नीचे दिए गए इनपुट बॉक्स में लिखें।
+              <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 leading-relaxed font-medium">
+                {t("heroSubtitle")}
               </p>
             </div>
 
             {/* Quick 1-Click Suggestion Cards (Gemini Style Grid) */}
             <div className="max-w-4xl mx-auto">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-stone-500 mb-2.5 px-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>त्वरित कानूनी सवाल व सुझाव (क्लिक करके तुरंत खोजें):</span>
+              <div className="flex items-center gap-1.5 text-xs font-bold text-stone-500 dark:text-stone-400 mb-2.5 px-1">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span>{t("quickSuggestionsHeading")}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                 {POPULAR_NOVEL_QUERIES.map((item, idx) => (
@@ -961,20 +964,20 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                         handleSearchAndResearch();
                       }, 50);
                     }}
-                    className="p-3 sm:p-3.5 rounded-xl bg-white hover:bg-amber-50/70 border border-stone-200 hover:border-amber-300 transition-all text-left group shadow-xs hover:shadow-sm cursor-pointer flex flex-col justify-between"
+                    className="p-3 sm:p-3.5 rounded-xl bg-white dark:bg-stone-900 hover:bg-amber-50/70 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 hover:border-amber-300 dark:hover:border-amber-700 transition-all text-left group shadow-xs hover:shadow-sm cursor-pointer flex flex-col justify-between"
                   >
                     <div>
                       <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 group-hover:bg-amber-100 text-stone-600 group-hover:text-amber-800 transition-colors">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 group-hover:bg-amber-100 dark:group-hover:bg-amber-950/60 text-stone-600 dark:text-stone-300 group-hover:text-amber-800 dark:group-hover:text-amber-300 transition-colors">
                           {item.category}
                         </span>
-                        <ArrowRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-700 transition-colors shrink-0" />
+                        <ArrowRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors shrink-0" />
                       </div>
-                      <h4 className="text-xs sm:text-sm font-bold text-stone-900 group-hover:text-amber-950 transition-colors line-clamp-1">
+                      <h4 className="text-xs sm:text-sm font-bold text-stone-900 dark:text-white group-hover:text-amber-950 dark:group-hover:text-amber-300 transition-colors line-clamp-1">
                         {item.title}
                       </h4>
                     </div>
-                    <p className="text-[11px] text-stone-500 mt-1 line-clamp-2 leading-snug">
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 line-clamp-2 leading-snug">
                       {item.facts}
                     </p>
                   </button>
@@ -983,16 +986,16 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
             </div>
 
             {/* Sleek Trust & Rules Strip */}
-            <div className="max-w-4xl mx-auto bg-amber-950 text-amber-100 rounded-xl p-3.5 sm:p-4 border border-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+            <div className="max-w-4xl mx-auto bg-amber-950 dark:bg-stone-900 text-amber-100 dark:text-stone-200 rounded-xl p-3.5 sm:p-4 border border-amber-900 dark:border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
               <div className="flex items-center gap-2">
                 <Globe className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
                 <span>
-                  <strong>लाइव आधिकारिक वेब खोज:</strong> भारत सरकार के अधिकृत पोर्टलों (<span className="text-amber-300 font-mono">.gov.in / indiacode.nic.in</span>) व नई संहिताओं (BNS/BNSS 2023) से सटीक सत्यापन।
+                  <strong>{t("liveWebSearchTitle")}</strong> {t("liveWebSearchDesc")}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 text-stone-300 text-[11px] shrink-0">
+              <div className="flex items-center gap-1.5 text-stone-300 dark:text-stone-400 text-[11px] shrink-0">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>15-सूत्रीय सत्यापन नियम लागू</span>
+                <span>{t("rulesEnforcedBadge")}</span>
               </div>
             </div>
           </div>
@@ -1230,7 +1233,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
 
           {/* 2. READY-TO-USE LEGAL DRAFT (तैयार कानूनी शिकायत / FIR ड्राफ्ट - त्वरित उपयोग हेतु) */}
           {result.generatedDraft && (
-            <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
+            <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 shadow-xs overflow-hidden">
               <div className="bg-amber-800 text-white px-5 py-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-amber-200" />
@@ -1276,39 +1279,39 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                 </div>
               </div>
 
-              <div className="p-5 font-mono text-xs sm:text-sm text-stone-800 whitespace-pre-wrap bg-stone-50/60 leading-relaxed border-b border-stone-200 max-h-96 overflow-y-auto">
+              <div className="p-5 font-mono text-xs sm:text-sm text-stone-800 dark:text-stone-200 whitespace-pre-wrap bg-stone-50/60 dark:bg-stone-800/60 leading-relaxed border-b border-stone-200 dark:border-stone-800 max-h-96 overflow-y-auto">
                 {result.generatedDraft}
               </div>
-              <div className="px-5 py-2 text-[11px] text-stone-500 bg-white flex items-center justify-between">
+              <div className="px-5 py-2 text-[11px] text-stone-500 dark:text-stone-400 bg-white dark:bg-stone-900 flex items-center justify-between border-t border-stone-200 dark:border-stone-800">
                 <span>* इस ड्राफ्ट में खाली स्थान [_____] को अपने सही विवरण व साक्ष्य संलग्न कर प्रस्तुत करें।</span>
-                <span className="font-semibold text-emerald-700">वर्तमान BNSS 2023 व BNS धाराओं पर आधारित</span>
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">वर्तमान BNSS 2023 व BNS धाराओं पर आधारित</span>
               </div>
             </div>
           )}
 
           {/* 3. LEGAL PROVISIONS & STATUTORY DETAILS (कानूनी धाराएं व दंडात्मक उपधारा संदर्भ) */}
-          <div className="bg-amber-50/70 rounded-xl border-2 border-amber-300/80 p-5 shadow-xs space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 pb-3">
+          <div className="bg-amber-50/70 dark:bg-stone-900/90 rounded-xl border-2 border-amber-300/80 dark:border-amber-700/60 p-5 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 dark:border-stone-800 pb-3">
               <div className="flex items-center gap-2">
-                <Scale className="w-5 h-5 text-amber-800" />
-                <h4 className="text-sm font-bold text-amber-950">
+                <Scale className="w-5 h-5 text-amber-800 dark:text-amber-400" />
+                <h4 className="text-sm font-bold text-amber-950 dark:text-amber-200">
                   लागू कानूनी धाराएं व वैधानिक संदर्भ (Statutory Reference — BNS / संहिता)
                 </h4>
               </div>
               <div className="flex items-center gap-2">
                 {result.legalSectionDetails?.lawType && (
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-md font-bold bg-amber-200/70 text-amber-900 border border-amber-300">
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-md font-bold bg-amber-200/70 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
                     {result.legalSectionDetails.lawType}
                   </span>
                 )}
                 {hardFail.isHardFailed ? (
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-md font-bold bg-red-100 text-red-800 border border-red-300 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3 text-red-600" />
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-md font-bold bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-800 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 text-red-600 dark:text-red-400" />
                     UNVERIFIED (असत्यापित) — वैधानिक साक्ष्य अपूर्ण
                   </span>
                 ) : (
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-md font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                    <Check className="w-3 h-3 text-emerald-600" />
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-md font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
+                    <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                     आधिकारिक कानून से सत्यापित
                   </span>
                 )}
@@ -1316,7 +1319,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
             </div>
 
             {/* 4 Pillars of Legal Section: Section, Punishment, Fine (Universal Accuracy Engine Sub-clause priority) */}
-            <div className="bg-white rounded-lg p-4 border border-amber-200/90 shadow-2xs">
+            <div className="bg-white dark:bg-stone-900/90 rounded-lg p-4 border border-amber-200/90 dark:border-stone-800 shadow-2xs">
               <LegalSectionDisplay
                 details={result.legalSectionDetails}
                 applicableLawFallback={result.applicableLaw}
@@ -1325,9 +1328,9 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
 
             {/* 4 Essential Breakdown Points for Legal Sections */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
-              <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                <div className="font-bold text-stone-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                  <BookOpen className="w-3 h-3 text-amber-700" />
+              <div className="bg-white dark:bg-stone-900/90 rounded-lg p-3.5 border border-amber-200/90 dark:border-stone-800 space-y-1">
+                <div className="font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                  <BookOpen className="w-3 h-3 text-amber-700 dark:text-amber-400" />
                   <span>
                     {result.legalSectionDetails?.isStateLaw
                       ? "राज्य अधिनियम एवं धारा (State Act & Section):"
@@ -1335,51 +1338,51 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                   </span>
                 </div>
                 {result.legalSectionDetails?.state && (
-                  <div className="text-[11px] font-semibold text-stone-600">
+                  <div className="text-[11px] font-semibold text-stone-600 dark:text-stone-300">
                     राज्य: {result.legalSectionDetails.state}
                   </div>
                 )}
-                <div className="text-sm font-bold text-stone-900">
+                <div className="text-sm font-bold text-stone-900 dark:text-white">
                   {result.legalSectionDetails?.actName || "भारतीय न्याय संहिता, 2023 / विशेष कानून"}
                 </div>
-                <div className="text-xs font-semibold text-blue-700">
+                <div className="text-xs font-semibold text-blue-700 dark:text-blue-400">
                   {result.legalSectionDetails?.sectionNumber || result.applicableLaw}
                 </div>
                 {result.legalSectionDetails?.sectionTitle && (
-                  <div className="text-xs text-stone-700 font-medium">
+                  <div className="text-xs text-stone-700 dark:text-stone-300 font-medium">
                     विषय: {result.legalSectionDetails.sectionTitle}
                   </div>
                 )}
               </div>
 
-              <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                <div className="font-bold text-stone-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                  <Scale className="w-3 h-3 text-amber-700" />
+              <div className="bg-white dark:bg-stone-900/90 rounded-lg p-3.5 border border-amber-200/90 dark:border-stone-800 space-y-1">
+                <div className="font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                  <Scale className="w-3 h-3 text-amber-700 dark:text-amber-400" />
                   <span>कानून में यह प्रावधान है:</span>
                 </div>
-                <div className="text-xs text-stone-800 leading-relaxed">
+                <div className="text-xs text-stone-800 dark:text-stone-200 leading-relaxed">
                   {result.legalSectionDetails?.provisionGeneral ||
                     "इस विषय में सुसंगत अधिनियम के तहत वैधानिक प्रक्रिया व प्रावधान परिभाषित हैं।"}
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                <div className="font-bold text-stone-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                  <Info className="w-3 h-3 text-blue-600" />
+              <div className="bg-white dark:bg-stone-900/90 rounded-lg p-3.5 border border-amber-200/90 dark:border-stone-800 space-y-1">
+                <div className="font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                  <Info className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                   <span>आपके मामले में यह लागू हो सकता है:</span>
                 </div>
-                <div className="text-xs text-stone-800 leading-relaxed">
+                <div className="text-xs text-stone-800 dark:text-stone-200 leading-relaxed">
                   {result.legalSectionDetails?.caseApplication ||
                     "नागरिक द्वारा बताए गए तथ्यों और परिस्थितियों के आधार पर यह लागू हो सकता है।"}
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg p-3.5 border border-amber-200/90 space-y-1">
-                <div className="font-bold text-amber-800 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+              <div className="bg-white dark:bg-stone-900/90 rounded-lg p-3.5 border border-amber-200/90 dark:border-stone-800 space-y-1">
+                <div className="font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                   <span>यह तथ्य/परिस्थिति पर निर्भर है:</span>
                 </div>
-                <div className="text-xs font-semibold text-amber-900 bg-amber-100/70 p-2 rounded border border-amber-300/80 leading-relaxed">
+                <div className="text-xs font-semibold text-amber-900 dark:text-amber-200 bg-amber-100/70 dark:bg-amber-950/60 p-2 rounded border border-amber-300/80 dark:border-amber-800 leading-relaxed">
                   {result.legalSectionDetails?.factsDependence ||
                     "यह धारा/कानून मामले की परिस्थितियों पर निर्भर करता है।"}
                 </div>
@@ -1388,15 +1391,15 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
           </div>
 
           {/* Format B Website Content Box */}
-          <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
-            <div className="bg-stone-50 px-5 py-3 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 shadow-xs overflow-hidden">
+            <div className="bg-stone-50 dark:bg-stone-800/80 px-5 py-3 border-b border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-700" />
-                <h4 className="text-sm font-bold text-stone-900">
+                <FileText className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                <h4 className="text-sm font-bold text-stone-900 dark:text-white">
                   Justice Ji वेबसाइट कंटेंट (मानक Format B)
                 </h4>
                 {hardFail.isHardFailed && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
                     ⚠️ असत्यापित
                   </span>
                 )}
@@ -1405,36 +1408,36 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleCopyText}
-                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 font-semibold text-stone-700 cursor-pointer shadow-2xs transition-all"
+                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-700 font-semibold text-stone-700 dark:text-stone-200 cursor-pointer shadow-2xs transition-all"
                   title="पूरा टेक्स्ट कॉपी करें"
                 >
                   {copiedText ? (
                     <>
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      <span className="text-emerald-600">कॉपी हो गया</span>
+                      <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-emerald-600 dark:text-emerald-400">{t("copied")}</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3.5 h-3.5 text-stone-600" />
-                      <span>टेक्स्ट कॉपी करें</span>
+                      <Copy className="w-3.5 h-3.5 text-stone-600 dark:text-stone-300" />
+                      <span>{t("copyText")}</span>
                     </>
                   )}
                 </button>
 
                 <button
                   onClick={handleCopyHtml}
-                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 font-semibold text-stone-700 cursor-pointer shadow-2xs transition-all"
+                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-700 font-semibold text-stone-700 dark:text-stone-200 cursor-pointer shadow-2xs transition-all"
                   title="HTML कोड कॉपी करें"
                 >
                   {copiedHtml ? (
                     <>
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      <span className="text-emerald-600">HTML कॉपी हो गया</span>
+                      <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-emerald-600 dark:text-emerald-400">{t("htmlCopied")}</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3.5 h-3.5 text-stone-600" />
-                      <span>HTML कॉपी</span>
+                      <Copy className="w-3.5 h-3.5 text-stone-600 dark:text-stone-300" />
+                      <span>{t("copyHtml")}</span>
                     </>
                   )}
                 </button>
@@ -1448,12 +1451,12 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                     {savedSuccess ? (
                       <>
                         <Check className="w-3.5 h-3.5 text-white" />
-                        <span>विषय सहेजा गया!</span>
+                        <span>{t("topicSaved")}</span>
                       </>
                     ) : (
                       <>
                         <Layers className="w-3.5 h-3.5 text-white" />
-                        <span>विषयों में जोड़ें</span>
+                        <span>{t("addToTopics")}</span>
                       </>
                     )}
                   </button>
@@ -1462,7 +1465,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
             </div>
 
             {/* Content Display */}
-            <div className="p-5 sm:p-6 text-sm text-stone-800 leading-relaxed font-['Yantramanav',sans-serif] bg-white">
+            <div className="p-5 sm:p-6 text-sm text-stone-800 dark:text-stone-100 leading-relaxed font-['Yantramanav',sans-serif] bg-white dark:bg-stone-900">
               <FormattedLegalContent
                 content={result.formatBContent}
                 isVerified={!hardFail.isHardFailed}
@@ -1472,13 +1475,13 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
           </div>
 
           {/* Official Verification Sources & Unverified Notes (Rule 12 & 15) */}
-          <div className="bg-stone-50 rounded-xl border border-stone-200 p-4 space-y-3 text-xs">
-            <div className="flex items-center justify-between gap-2 border-b border-stone-200 pb-2">
-              <div className="font-bold text-stone-800 flex items-center gap-1.5">
-                <Globe className="w-4 h-4 text-amber-700" />
+          <div className="bg-stone-50 dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 p-4 space-y-3 text-xs">
+            <div className="flex items-center justify-between gap-2 border-b border-stone-200 dark:border-stone-800 pb-2">
+              <div className="font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                <Globe className="w-4 h-4 text-amber-700 dark:text-amber-400" />
                 <span>सत्यापित आधिकारिक वेब स्रोत (Official Government & Legal Sources):</span>
               </div>
-              <span className="text-stone-500">जांच तिथि: {result.verificationDate}</span>
+              <span className="text-stone-500 dark:text-stone-400">जांच तिथि: {result.verificationDate}</span>
             </div>
 
             {result.officialSources && result.officialSources.length > 0 ? (
@@ -1489,7 +1492,7 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                     href={src.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-stone-200 text-stone-700 hover:text-amber-900 hover:border-amber-300 transition-all font-medium text-[11px]"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:text-amber-900 dark:hover:text-amber-300 hover:border-amber-300 dark:hover:border-amber-700 transition-all font-medium text-[11px]"
                   >
                     <ExternalLink className="w-3 h-3 text-stone-400" />
                     <span className="truncate max-w-xs">{src.title || src.url}</span>
@@ -1497,14 +1500,14 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                 ))}
               </div>
             ) : (
-              <p className="text-stone-500">
+              <p className="text-stone-500 dark:text-stone-400">
                 आधिकारिक विधिक संहिता (BNS/BNSS 2023 गजट) और राष्ट्रीय विधिक सेवा पोर्टल के अनुसार संकलित।
               </p>
             )}
 
             {result.unverifiedNote && (
-              <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold">सत्यापन सीमा (Verification Limit): </span>
                   <span>{result.unverifiedNote}</span>
@@ -1537,32 +1540,32 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
 
         {/* Expandable Location & Facts Popover / Drawer */}
         {showLocationFilters && (
-          <div className="mb-2.5 p-3.5 sm:p-4 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-300 shadow-xl space-y-3 animate-in fade-in slide-in-from-bottom-3">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800">
-                <MapPin className="w-4 h-4 text-amber-700" />
-                <span>क्षेत्रीय विधिक क्षेत्राधिकार व विशिष्ट तथ्य (वैकल्पिक)</span>
+          <div className="mb-2.5 p-3.5 sm:p-4 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl border border-stone-300 dark:border-stone-700 shadow-xl space-y-3 animate-in fade-in slide-in-from-bottom-3">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800 dark:text-white">
+                <MapPin className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                <span>{t("locationDrawerTitle")}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setShowLocationFilters(false)}
-                className="text-xs font-semibold text-stone-500 hover:text-stone-800 px-2 py-0.5 rounded-md hover:bg-stone-100"
+                className="text-xs font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 px-2 py-0.5 rounded-md hover:bg-stone-100 dark:hover:bg-stone-800"
               >
-                बन्द करें ✕
+                ✕
               </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
               <div>
-                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                  राज्य (State)
+                <label className="block text-[11px] font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                  {t("stateLabel")}
                 </label>
                 <select
                   value={userState}
                   onChange={(e) => setUserState(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs focus:ring-1 focus:ring-amber-600"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-100 text-xs focus:ring-1 focus:ring-amber-600"
                 >
-                  <option value="">-- राज्य चुनें --</option>
+                  <option value="">{t("selectStatePlaceholder")}</option>
                   {INDIAN_STATES.map((st, i) => (
                     <option key={i} value={st}>
                       {st}
@@ -1572,42 +1575,42 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                  जिला / शहर (District)
+                <label className="block text-[11px] font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                  {t("districtLabel")}
                 </label>
                 <input
                   type="text"
                   value={userDistrict}
                   onChange={(e) => setUserDistrict(e.target.value)}
-                  placeholder="उदा: लखनऊ, भोपाल, जयपुर..."
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs focus:ring-1 focus:ring-amber-600"
+                  placeholder={t("districtPlaceholder")}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-100 text-xs focus:ring-1 focus:ring-amber-600 placeholder:text-stone-400 dark:placeholder:text-stone-500"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                  विशिष्ट तथ्य (तारीख, राशि, विपक्षी)
+                <label className="block text-[11px] font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                  {t("factsLabel")}
                 </label>
                 <input
                   type="text"
                   value={userFacts}
                   onChange={(e) => setUserFacts(e.target.value)}
-                  placeholder="उदा: 50,000 रुपये फ्रॉड, 2 दिन पहले..."
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs focus:ring-1 focus:ring-amber-600"
+                  placeholder={t("factsPlaceholder")}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-100 text-xs focus:ring-1 focus:ring-amber-600 placeholder:text-stone-400 dark:placeholder:text-stone-500"
                 />
               </div>
             </div>
 
-            <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-xs">
-              <label className="inline-flex items-center gap-2 text-stone-700 cursor-pointer select-none">
+            <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs">
+              <label className="inline-flex items-center gap-2 text-stone-700 dark:text-stone-300 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={needDraft}
                   onChange={(e) => setNeedDraft(e.target.checked)}
-                  className="w-4 h-4 text-amber-700 rounded border-stone-300 focus:ring-amber-600"
+                  className="w-4 h-4 text-amber-700 rounded border-stone-300 dark:border-stone-600 focus:ring-amber-600"
                 />
-                <span className="font-semibold text-stone-800 text-[11px]">
-                  लिखित कानूनी शिकायत / FIR ड्राफ्ट भी स्वतः बनाएं
+                <span className="font-semibold text-stone-800 dark:text-stone-200 text-[11px]">
+                  {t("autoDraftCheckbox")}
                 </span>
               </label>
 
@@ -1619,9 +1622,9 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                     setUserDistrict("");
                     setUserFacts("");
                   }}
-                  className="text-[11px] text-amber-800 hover:underline"
+                  className="text-[11px] text-amber-800 dark:text-amber-400 hover:underline"
                 >
-                  फिल्टर हटाएं
+                  {t("removeFilters")}
                 </button>
               )}
             </div>
@@ -1632,9 +1635,9 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
         <form
           id="gemini-search-form"
           onSubmit={handleSearchAndResearch}
-          className="relative flex items-center bg-white rounded-full border border-stone-300 shadow-lg hover:shadow-xl focus-within:shadow-xl focus-within:border-amber-600 focus-within:ring-3 focus-within:ring-amber-500/20 transition-all p-1.5 sm:p-2"
+          className="relative flex items-center bg-white dark:bg-stone-800 rounded-full border border-stone-300 dark:border-stone-700 shadow-lg hover:shadow-xl focus-within:shadow-xl focus-within:border-amber-600 focus-within:ring-3 focus-within:ring-amber-500/20 transition-all p-1.5 sm:p-2"
         >
-          {/* Left Controls: Voice & Location Pills */}
+          {/* Left Controls: Voice, Location Pill & Language Dropdown */}
           <div className="flex items-center gap-1 pl-1 shrink-0">
             <VoiceInputButton
               onStart={() => {
@@ -1648,24 +1651,47 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
               buttonSize="md"
             />
 
+            {/* Location Filter Button with State / District Label and Alert Badge */}
             <button
               type="button"
               onClick={() => setShowLocationFilters((prev) => !prev)}
-              title="स्थान व विशिष्ट तथ्य जोड़ें"
+              title={userState ? `चुना हुआ राज्य: ${userState}${userDistrict ? `, ${userDistrict}` : ""}` : t("suggestedLocationTip")}
               className={`px-2.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0 ${
                 userState || userDistrict || userFacts
-                  ? "bg-amber-100 text-amber-900 border border-amber-300"
-                  : "bg-stone-100 hover:bg-stone-200 text-stone-600 border border-stone-200"
+                  ? "bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700"
+                  : "bg-stone-100 dark:bg-stone-700/60 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-600"
               }`}
             >
-              <MapPin className="w-3.5 h-3.5 text-amber-700" />
+              <MapPin className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
               <span className="hidden sm:inline">
-                {userState ? `${userState}${userDistrict ? ` • ${userDistrict}` : ""}` : "स्थान"}
+                {userState ? `${userState}${userDistrict ? ` • ${userDistrict}` : ""}` : t("locationButton")}
               </span>
-              {(userState || userDistrict || userFacts) && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+              {(userState || userDistrict || userFacts) ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              ) : (
+                <span className="hidden md:inline text-[10px] px-1 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-normal">
+                  {t("optionalBadge")}
+                </span>
               )}
             </button>
+
+            {/* Language Selection Pill inside search bar */}
+            <div className="relative inline-flex items-center">
+              <Globe className="w-3 h-3 text-stone-400 dark:text-stone-500 absolute left-2 pointer-events-none" />
+              <select
+                aria-label="खोज भाषा / Search Language"
+                value={currentLanguage.code}
+                onChange={(e) => setLanguageByCode(e.target.value)}
+                className="pl-6 pr-4 py-1 text-[11px] font-semibold bg-stone-100 dark:bg-stone-700/60 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-600 rounded-full focus:outline-none cursor-pointer appearance-none"
+                title="भाषा चुनें / Language"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code} className="dark:bg-stone-800">
+                    {lang.nativeName}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Central Textarea */}
@@ -1676,13 +1702,13 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
             onBeforeInput={handleQueryBeforeInput}
             onPaste={handleQueryPaste}
             onChange={handleQueryChange}
-            placeholder="अपनी कानूनी समस्या यहाँ लिखें (जैसे: जमीन पर अवैध कब्जा, बाइक चोरी, चेक बाउंस, मारपीट, धमकी...)"
+            placeholder={t("searchPlaceholder")}
             rows={1}
-            className="flex-1 bg-transparent px-3 py-1.5 sm:py-2 text-xs sm:text-sm md:text-base text-stone-900 focus:outline-none placeholder:text-stone-400 font-medium resize-none max-h-24 leading-normal"
+            className="flex-1 bg-transparent px-3 py-1.5 sm:py-2 text-xs sm:text-sm md:text-base text-stone-900 dark:text-stone-100 focus:outline-none placeholder:text-stone-400 dark:placeholder:text-stone-500 font-medium resize-none max-h-24 leading-normal"
             required
           />
 
-          {/* Right Controls: Clear and Send */}
+          {/* Right Controls: Clear and Search Button */}
           <div className="flex items-center gap-1 pr-0.5 shrink-0">
             {query && (
               <button
@@ -1691,24 +1717,24 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
                   setQuery("");
                   isFreshInputPending.current = false;
                 }}
-                className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
-                title="साफ करें"
+                className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors cursor-pointer"
+                title={t("clearButton")}
               >
                 <X className="w-4 h-4" />
               </button>
             )}
 
-            {/* Circular Send Button (Gemini Style) */}
+            {/* Circular Search Button */}
             <button
               type="submit"
               disabled={isLoading || isSubmittingRef.current || !query.trim()}
-              title="सत्यापित कानूनी समाधान खोजें (Enter)"
+              title={t("searchButton")}
               className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-amber-700 hover:bg-amber-800 disabled:opacity-40 disabled:hover:bg-amber-700 text-white flex items-center justify-center shrink-0 shadow-md cursor-pointer transition-all"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin text-white" />
               ) : (
-                <ArrowUp className="w-5 h-5 text-white" />
+                <Search className="w-5 h-5 text-white" />
               )}
             </button>
           </div>
@@ -1716,8 +1742,13 @@ export const LegalWebSearch: React.FC<LegalWebSearchProps> = ({
 
         {/* Micro note below input */}
         <div className="text-center mt-1.5">
-          <p className="text-[10px] sm:text-[11px] text-stone-500 font-medium">
+          <p className="text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-medium">
             Justice Ji विधिक सूचना प्रणाली • नई संहिताएं BNS / BNSS / BSA 2023 से 100% गजट-सत्यापित
+            {!userState && (
+              <span className="hidden sm:inline text-amber-700 dark:text-amber-400 ml-1.5 font-normal">
+                (सुझाव: राज्य कानून या स्थानीय संशोधन के लिए 'स्थान' जोड़ सकते हैं)
+              </span>
+            )}
           </p>
         </div>
       </div>
