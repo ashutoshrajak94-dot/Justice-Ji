@@ -59,16 +59,6 @@ export const LegalSectionDisplay: React.FC<LegalSectionDisplayProps> = ({
 }) => {
   if (!details && !applicableLawFallback) return null;
 
-  // Strict verification check: block rendering if isVerified === false
-  if (isVerified === false) {
-    return (
-      <div className="p-3.5 sm:p-4 bg-red-50 border-2 border-red-600 rounded-lg text-red-950 font-bold text-xs sm:text-sm my-2 flex items-center gap-2">
-        <span className="text-red-600 text-lg">🚨</span>
-        <span>STATUS: OVERALL RESULT: FAIL ({failReason || "वैधानिक साक्ष्य अपूर्ण है"})</span>
-      </div>
-    );
-  }
-
   // Uncertainty Rule (Rule 7)
   if (details?.isUncertain || details?.uncertaintyMessage) {
     return (
@@ -91,12 +81,16 @@ export const LegalSectionDisplay: React.FC<LegalSectionDisplayProps> = ({
     "";
 
   // Check if punishment is absent or explicit "अलग से दंड नहीं"
+  const punishmentText = details?.punishment || details?.maxPunishment || "";
+  const hasRealPunishment = /(?:वर्ष|साल|माह|महीने|कारावास|जेल|सश्रम|साधारण|मृत्यु|आजीवन|दंडनीय|punishment|imprisonment|\d+\s*वर्ष)/i.test(punishmentText);
+
   const hasNoPunishment =
-    details?.hasPunishmentInProvision === false ||
-    details?.punishment?.includes("अलग से दंड") ||
-    details?.minPunishment?.includes("अलग से दंड") ||
-    details?.maxPunishment?.includes("अलग से दंड") ||
-    (!details?.punishment && !details?.maxPunishment);
+    !hasRealPunishment &&
+    (details?.hasPunishmentInProvision === false ||
+      details?.punishment?.includes("अलग से दंड") ||
+      details?.minPunishment?.includes("अलग से दंड") ||
+      details?.maxPunishment?.includes("अलग से दंड") ||
+      (!details?.punishment && !details?.maxPunishment));
 
   const minPunishment =
     details?.minPunishment || "कानून में न्यूनतम निर्धारित नहीं / लागू नहीं";
@@ -107,11 +101,15 @@ export const LegalSectionDisplay: React.FC<LegalSectionDisplayProps> = ({
     "अधिकतम सजा आधिकारिक संहिता के अनुसार";
 
   // Check if fine is absent or explicit "अलग से दंड/जुर्माना नहीं"
+  const fineText = details?.fineAmount || details?.fine || "";
+  const hasRealFine = /(?:जुर्माना|रुपये|₹|लाख|हजार|शास्ति|penalty|fine|विवेक)/i.test(fineText);
+
   const hasNoFine =
-    details?.hasFineInProvision === false ||
-    details?.fineAmount?.includes("अलग से दंड") ||
-    details?.fine?.includes("अलग से दंड") ||
-    (!details?.fineAmount && !details?.fine);
+    !hasRealFine &&
+    (details?.hasFineInProvision === false ||
+      details?.fineAmount?.includes("अलग से दंड") ||
+      details?.fine?.includes("अलग से दंड") ||
+      (!details?.fineAmount && !details?.fine));
 
   const fineAmount =
     details?.fineAmount ||
@@ -138,46 +136,51 @@ export const LegalSectionDisplay: React.FC<LegalSectionDisplayProps> = ({
     details?.authority || "संबंधित क्षेत्राधिकार का सक्षम विधिक प्राधिकरण / न्यायालय";
 
   return (
-    <div className="py-2 space-y-3 font-['Yantramanav',sans-serif] text-sm sm:text-base leading-relaxed text-stone-900">
+    <div className="py-2 space-y-3 font-['Yantramanav',sans-serif] text-sm sm:text-base leading-relaxed text-stone-900 dark:text-stone-100">
+      {isVerified === false && (
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 mb-1 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+          <span>⚠️ असत्यापित</span>
+        </div>
+      )}
       {/* ⚖️ संबंधित कानून */}
       <div className="space-y-1">
-        <div className="font-bold text-stone-900 flex items-center gap-1.5 text-base sm:text-lg">
+        <div className="font-bold text-stone-900 dark:text-white flex items-center gap-1.5 text-base sm:text-lg">
           <span>⚖️</span>
           <span>संबंधित कानून</span>
         </div>
         {details?.state && (
-          <div className="text-stone-800 text-xs sm:text-sm pl-4">
-            <span className="font-semibold text-stone-600">• राज्य: </span>
-            <span className="text-stone-900 font-medium">{details.state}</span>
+          <div className="text-stone-800 dark:text-stone-200 text-xs sm:text-sm pl-4">
+            <span className="font-semibold text-stone-600 dark:text-stone-400">• राज्य: </span>
+            <span className="text-stone-900 dark:text-white font-medium">{details.state}</span>
           </div>
         )}
-        <div className="text-stone-800 text-xs sm:text-sm pl-4">
-          <span className="font-semibold text-stone-600">• कानून/Code: </span>
-          <span className="text-stone-900 font-medium">{actName}</span>
+        <div className="text-stone-800 dark:text-stone-200 text-xs sm:text-sm pl-4">
+          <span className="font-semibold text-stone-600 dark:text-stone-400">• कानून/Code: </span>
+          <span className="text-stone-900 dark:text-white font-medium">{actName}</span>
         </div>
         {/* Blue font for Section */}
-        <div className="text-blue-700 font-semibold text-sm sm:text-base pl-4 tracking-tight">
+        <div className="text-blue-700 dark:text-blue-400 font-semibold text-sm sm:text-base pl-4 tracking-tight">
           • धारा: {sectionNumber}
         </div>
         {/* Section title / subject */}
         <div className="text-stone-700 text-xs sm:text-sm pl-4">
-          <span className="font-semibold text-stone-600">• धारा का विषय: </span>
-          <span className="text-stone-800">{sectionTitleOrSubject}</span>
+          <span className="font-semibold text-stone-600 dark:text-stone-400">• धारा का विषय: </span>
+          <span className="text-stone-800 dark:text-stone-100">{sectionTitleOrSubject}</span>
         </div>
         {applicableCondition && applicableCondition !== sectionTitleOrSubject && (
-          <div className="text-stone-700 text-xs sm:text-sm pl-4">
-            <span className="font-semibold text-stone-600">• किस स्थिति में लागू हो सकती है: </span>
-            <span className="text-stone-800">{applicableCondition}</span>
+          <div className="text-stone-700 dark:text-stone-300 text-xs sm:text-sm pl-4">
+            <span className="font-semibold text-stone-600 dark:text-stone-400">• किस स्थिति में लागू हो सकती है: </span>
+            <span className="text-stone-800 dark:text-stone-100">{applicableCondition}</span>
           </div>
         )}
         {details?.neighbouringProvisionsNote && (
-          <div className="text-stone-700 text-xs sm:text-sm pl-4">
-            <span className="font-semibold text-stone-600">• संबंधित अन्य धारा/प्रावधान: </span>
-            <span className="text-stone-800">{details.neighbouringProvisionsNote}</span>
+          <div className="text-stone-700 dark:text-stone-300 text-xs sm:text-sm pl-4">
+            <span className="font-semibold text-stone-600 dark:text-stone-400">• संबंधित अन्य धारा/प्रावधान: </span>
+            <span className="text-stone-800 dark:text-stone-100">{details.neighbouringProvisionsNote}</span>
           </div>
         )}
         {(details?.isUncertain || details?.uncertaintyMessage) && (
-          <div className="text-stone-700 text-xs sm:text-sm pl-4 font-medium">
+          <div className="text-stone-700 dark:text-stone-300 text-xs sm:text-sm pl-4 font-medium">
             • {details.uncertaintyMessage || "आधिकारिक कानून के मूल प्रावधान से इस धारा/दंड की पुष्टि नहीं हो पा रही है, इसलिए मैं अनुमान से धारा या जुर्माने की राशि नहीं बता रहा हूँ।"}
           </div>
         )}
@@ -185,25 +188,27 @@ export const LegalSectionDisplay: React.FC<LegalSectionDisplayProps> = ({
 
       {/* 🔴 सजा: in Red font without boxes or backgrounds */}
       <div className="space-y-1">
-        <div className="font-bold text-red-700 flex items-center gap-1.5 text-base">
+        <div className="font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5 text-base">
           <span>🔴</span>
           <span>सजा:</span>
         </div>
         {hasNoPunishment ? (
-          <div className="text-red-700 font-medium text-xs sm:text-sm pl-4">
+          <div className="text-red-700 dark:text-red-400 font-medium text-xs sm:text-sm pl-4">
             • इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।
           </div>
         ) : isPunishmentUnverified ? (
-          <div className="text-red-700 font-bold text-xs sm:text-sm pl-4 bg-red-50 py-1 px-2 rounded border border-red-200">
+          <div className="text-red-700 dark:text-red-400 font-medium text-xs sm:text-sm pl-4">
             • सजा: अपुष्ट / UNVERIFIED (आधिकारिक कानून के मूल पाठ से सत्यापन आवश्यक है)
           </div>
         ) : (
           <>
-            <div className="text-red-700 font-medium text-xs sm:text-sm pl-4">
-              • न्यूनतम: {minPunishment}
-            </div>
-            <div className="text-red-700 font-semibold text-xs sm:text-sm pl-4">
-              • अधिकतम: {maxPunishment}
+            {!minPunishment.includes("लागू नहीं") && !minPunishment.includes("निर्धारित नहीं") && !details?.punishment?.includes(";") && (
+              <div className="text-red-700 dark:text-red-400 font-medium text-xs sm:text-sm pl-4">
+                • न्यूनतम: {minPunishment}
+              </div>
+            )}
+            <div className="text-red-700 dark:text-red-400 font-semibold text-xs sm:text-sm pl-4 whitespace-pre-line">
+              • {details?.punishment && details.punishment.includes(";") ? details.punishment : `अधिकतम: ${maxPunishment}`}
             </div>
           </>
         )}
@@ -211,25 +216,25 @@ export const LegalSectionDisplay: React.FC<LegalSectionDisplayProps> = ({
 
       {/* 🟠 जुर्माना: in Orange font without boxes or backgrounds */}
       <div className="space-y-1">
-        <div className="font-bold text-orange-600 flex items-center gap-1.5 text-base">
+        <div className="font-bold text-orange-600 dark:text-orange-400 flex items-center gap-1.5 text-base">
           <span>🟠</span>
           <span>जुर्माना:</span>
         </div>
         {hasNoFine ? (
-          <div className="text-orange-600 font-medium text-xs sm:text-sm pl-4">
+          <div className="text-orange-600 dark:text-orange-400 font-medium text-xs sm:text-sm pl-4">
             • इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।
           </div>
         ) : isFineUnverified ? (
-          <div className="text-red-700 font-bold text-xs sm:text-sm pl-4 bg-red-50 py-1 px-2 rounded border border-red-200">
+          <div className="text-orange-600 dark:text-orange-400 font-medium text-xs sm:text-sm pl-4">
             • जुर्माना: अपुष्ट / UNVERIFIED (आधिकारिक गजट / मूल पाठ से सत्यापन आवश्यक है)
           </div>
         ) : (
           <>
-            <div className="text-orange-600 font-semibold text-xs sm:text-sm pl-4">
-              • राशि: {fineAmount}
+            <div className="text-orange-600 dark:text-orange-400 font-semibold text-xs sm:text-sm pl-4 whitespace-pre-line">
+              • {fineAmount.includes(";") ? fineAmount : `राशि: ${fineAmount}`}
             </div>
-            {fineOtherCondition && !fineOtherCondition.includes("अलग से दंड") && (
-              <div className="text-orange-600 font-medium text-xs sm:text-sm pl-4">
+            {fineOtherCondition && !fineOtherCondition.includes("अलग से दंड") && !fineAmount.includes(";") && (
+              <div className="text-orange-600 dark:text-orange-400 font-medium text-xs sm:text-sm pl-4">
                 • अन्य शर्त: {fineOtherCondition}
               </div>
             )}
@@ -239,21 +244,21 @@ export const LegalSectionDisplay: React.FC<LegalSectionDisplayProps> = ({
 
       {/* 🟢 क्या करें: */}
       <div className="space-y-1">
-        <div className="font-bold text-stone-900 flex items-center gap-1.5 text-base">
+        <div className="font-bold text-stone-900 dark:text-white flex items-center gap-1.5 text-base">
           <span>🟢</span>
           <span>क्या करें:</span>
         </div>
-        <div className="text-stone-800 text-xs sm:text-sm pl-4">
-          <span className="font-semibold text-stone-700">• पहला कदम: </span>
-          <span>{firstStep}</span>
+        <div className="text-stone-800 dark:text-stone-200 text-xs sm:text-sm pl-4">
+          <span className="font-semibold text-stone-700 dark:text-stone-400">• पहला कदम: </span>
+          <span className="dark:text-stone-100">{firstStep}</span>
         </div>
-        <div className="text-stone-800 text-xs sm:text-sm pl-4">
-          <span className="font-semibold text-stone-700">• अगला कदम: </span>
-          <span>{nextStep}</span>
+        <div className="text-stone-800 dark:text-stone-200 text-xs sm:text-sm pl-4">
+          <span className="font-semibold text-stone-700 dark:text-stone-400">• अगला कदम: </span>
+          <span className="dark:text-stone-100">{nextStep}</span>
         </div>
-        <div className="text-stone-800 text-xs sm:text-sm pl-4">
-          <span className="font-semibold text-stone-700">• संबंधित अधिकारी/प्राधिकरण: </span>
-          <span>{authority}</span>
+        <div className="text-stone-800 dark:text-stone-200 text-xs sm:text-sm pl-4">
+          <span className="font-semibold text-stone-700 dark:text-stone-400">• संबंधित अधिकारी/प्राधिकरण: </span>
+          <span className="dark:text-stone-100">{authority}</span>
         </div>
       </div>
 
@@ -494,93 +499,16 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
 
   const verification = resolveLegalVerification(content, isVerified, failReason);
 
-  // STRICT ENFORCEMENT: If isVerified is false, BLOCK rendering of legal article text
-  // and force display of the FAIL status warning instead.
-  if (!verification.isVerified) {
-    return (
-      <div
-        id="legal-content-fail-warning"
-        className={`p-5 sm:p-6 bg-red-50 border-2 border-red-600 rounded-xl text-red-950 shadow-md space-y-4 my-2 font-['Yantramanav',sans-serif] ${className}`}
-      >
-        <div className="flex items-start gap-3 border-b border-red-200 pb-3.5">
-          <div className="p-2 bg-red-600 text-white rounded-lg shrink-0 mt-0.5 shadow-2xs">
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-          </div>
-          <div className="space-y-1 flex-1">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-black bg-red-600 text-white tracking-wide uppercase">
-              <span>Hard-Fail Gate Enforced</span>
-              <span>•</span>
-              <span>isVerified = false</span>
-            </div>
-            <h3 className="text-base sm:text-lg font-black text-red-700 tracking-tight">
-              STATUS: OVERALL RESULT: FAIL ({verification.reason})
-            </h3>
-            <p className="text-xs sm:text-sm text-red-800 font-semibold">
-              कानूनी लेख का पाठ अवरुद्ध (Legal Article Text Rendering Blocked)
-            </p>
-          </div>
-        </div>
+  // Technical audit is logged to console only (backend & client console), not blocking UI
+  React.useEffect(() => {
+    if (!verification.isVerified) {
+      console.log(
+        `[Justice Ji Audit Report (Internal Log)] STATUS: OVERALL RESULT: FAIL (${verification.reason})`
+      );
+    }
+  }, [verification.isVerified, verification.reason]);
 
-        <div className="space-y-3 text-xs sm:text-sm text-stone-800 bg-white/95 p-4 sm:p-5 rounded-lg border border-red-200 leading-relaxed shadow-2xs">
-          <div className="font-bold text-red-950 text-sm flex items-center gap-2 border-b border-red-100 pb-2">
-            <span className="text-red-600 font-bold">⚠️</span>
-            <span>हार्ड-फेल सत्यापन रिपोर्ट (Hard-Fail Audit Report):</span>
-          </div>
-          <div className="space-y-2 text-stone-800">
-            <div>
-              <span className="font-bold text-red-900">1. सत्यापन स्थिति (Verification State):</span>{" "}
-              <span className="font-mono font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded border border-red-300">
-                isVerified = false [FAIL]
-              </span>
-            </div>
-            <div>
-              <span className="font-bold text-red-900">2. विफलता का कारण (Reason):</span>{" "}
-              <span className="text-stone-900 font-semibold">{verification.reason}</span>
-            </div>
-            <div>
-              <span className="font-bold text-red-900">3. हार्ड-फेल नियम:</span> Justice Ji के अनिवार्य कानूनी नियमों (PART 6 — HARD-FAIL VERIFICATION GATE) के अनुसार, यदि किसी भी धारा का कोई भी भाग (जैसे पेनल्टी, अमेंडमेंट, उपधारा, अथॉरिटी) Level 1 आधिकारिक गजट या मूल अधिनियम से 100% सत्यापित नहीं है, तो सामान्य कानूनी लेख का पाठ प्रदर्शित करना पूर्णतः वर्जित है।
-            </div>
-            <div>
-              <span className="font-bold text-red-900">4. अनिवार्य निर्देश:</span> जब तक संबंधित राज्य ई-गजट या प्राथमिक कानून से धारा, उपधारा व दंड की सटीक पुष्टि नहीं हो जाती, तब तक किसी भी अनौपचारिक अथवा अनुमानित कानूनी दावे को प्रकाशित न करें।
-            </div>
-          </div>
-        </div>
-
-        <div className="text-xs text-red-700 italic border-t border-red-200 pt-2 flex flex-wrap items-center justify-between gap-2">
-          <span className="flex items-center gap-1 font-semibold">
-            LEGAL ACCURACY &gt; SOURCE AUTHORITY &gt; UNVERIFIED ARTICLES STRICTLY BLOCKED
-          </span>
-          <span className="text-[11px] font-bold text-red-800 bg-red-100 px-2 py-0.5 rounded border border-red-200">
-            Justice Ji Hard-Fail Protocol
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  // Only if isVerified is true, continue rendering article lines:
-  // SAFETY NET: The AI response sometimes returns all numbered points
-  // ("1. समस्या क्या है... 2. क्या करें...") on a single line without
-  // real line breaks. Force a line-break before each known numbered
-  // heading so it always renders as separate, properly styled lines.
-  const normalizedContent = content.replace(
-    /\s*(\d+\.\s*(?:समस्या\s*क्या\s*है|क्या\s*करें|संबंधित\s*कानून(?:\/धारा)?|जरूरी\s*कागज़|कहाँ\s*जाएँ|वर्तमान\s*संपर्क\s*जानकारी|आगे\s*क्या\s*करें|ध्यान\s*रखें))/g,
-    "\n$1"
-  );
-  const lines = normalizedContent.split("\n");
+  const lines = content.split("\n");
 
   // Track context for multi-line sections like 🔴 सजा or 🟠 जुर्माना
   let inPunishmentContext = false;
@@ -588,6 +516,11 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
 
   return (
     <div className={`space-y-1 ${className}`}>
+      {!verification.isVerified && (
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 mb-2 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+          <span>⚠️ असत्यापित</span>
+        </div>
+      )}
       {lines.map((line, idx) => {
         const trimmed = line.trim();
 
@@ -598,22 +531,9 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
           return <div key={idx} className="h-2" />;
         }
 
-        // Hard-Fail Gate: Red Warning Banner for STATUS: OVERALL RESULT: FAIL or NOT VERIFIED
-        if (/^STATUS:\s*(?:OVERALL\s*RESULT:\s*FAIL|NOT\s*VERIFIED)/i.test(trimmed)) {
-          return (
-            <div
-              key={idx}
-              className="p-3.5 sm:p-4 bg-red-50 border-2 border-red-600 rounded-xl text-red-900 font-black text-sm sm:text-base leading-snug my-2.5 shadow-sm flex items-start gap-2.5"
-            >
-              <span className="text-red-600 text-xl shrink-0">🚨</span>
-              <div className="space-y-1">
-                <div className="text-xs font-black uppercase tracking-wider text-red-600">
-                  HARD-FAIL GATE ENFORCED
-                </div>
-                <div className="text-red-800 font-bold">{trimmed}</div>
-              </div>
-            </div>
-          );
+        // Hide legacy technical FAIL strings from UI if any exist in text
+        if (/^STATUS:\s*(?:OVERALL\s*RESULT:\s*FAIL|NOT\s*VERIFIED)/i.test(trimmed) || /^\[हार्ड-फेल गेट प्रवर्तन/i.test(trimmed)) {
+          return null;
         }
 
         // Check Uncertainty Rule (Rule 7)
@@ -712,7 +632,7 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
           return (
             <div
               key={idx}
-              className="text-blue-700 font-semibold text-sm sm:text-base leading-relaxed pl-3 sm:pl-4"
+              className="text-blue-700 dark:text-blue-400 font-semibold text-sm sm:text-base leading-relaxed pl-3 sm:pl-4"
             >
               {displayLine}
             </div>
@@ -724,7 +644,7 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
           return (
             <div
               key={idx}
-              className="text-stone-800 text-xs sm:text-sm leading-relaxed pl-3 sm:pl-4"
+              className="text-stone-800 dark:text-stone-200 text-xs sm:text-sm leading-relaxed pl-3 sm:pl-4"
             >
               {line}
             </div>
@@ -739,7 +659,7 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
           return (
             <div
               key={idx}
-              className="text-red-700 font-semibold text-sm sm:text-base leading-relaxed pl-3 sm:pl-4"
+              className="text-red-700 dark:text-red-400 font-semibold text-sm sm:text-base leading-relaxed pl-3 sm:pl-4"
             >
               {line}
             </div>
@@ -755,7 +675,7 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
           return (
             <div
               key={idx}
-              className="text-red-700 font-semibold text-sm sm:text-base leading-relaxed"
+              className="text-red-700 dark:text-red-400 font-semibold text-sm sm:text-base leading-relaxed"
             >
               {line}
             </div>
@@ -770,7 +690,7 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
           return (
             <div
               key={idx}
-              className="text-orange-600 font-semibold text-sm sm:text-base leading-relaxed pl-3 sm:pl-4"
+              className="text-orange-600 dark:text-orange-400 font-semibold text-sm sm:text-base leading-relaxed pl-3 sm:pl-4"
             >
               {line}
             </div>
@@ -786,7 +706,7 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
           return (
             <div
               key={idx}
-              className="text-orange-600 font-semibold text-sm sm:text-base leading-relaxed"
+              className="text-orange-600 dark:text-orange-400 font-semibold text-sm sm:text-base leading-relaxed"
             >
               {line}
             </div>
@@ -799,7 +719,7 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
           return (
             <h3
               key={idx}
-              className="font-bold text-base sm:text-lg text-stone-900 underline underline-offset-4 pt-2 pb-1"
+              className="font-bold text-base sm:text-lg text-stone-900 dark:text-white underline underline-offset-4 pt-2 pb-1"
             >
               {title}
             </h3>
@@ -814,7 +734,7 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
           return (
             <h4
               key={idx}
-              className="font-bold text-stone-900 text-sm sm:text-base pt-3 pb-0.5"
+              className="font-bold text-stone-900 dark:text-white text-sm sm:text-base pt-3 pb-0.5"
             >
               {line}
             </h4>
@@ -823,7 +743,7 @@ export const FormattedLegalContent: React.FC<FormattedLegalContentProps> = ({
 
         // Standard text lines
         return (
-          <div key={idx} className="text-stone-800 leading-relaxed text-sm sm:text-base">
+          <div key={idx} className="text-stone-800 dark:text-stone-100 leading-relaxed text-sm sm:text-base">
             {line}
           </div>
         );
