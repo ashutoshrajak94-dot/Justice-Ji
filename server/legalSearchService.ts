@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { generateContentWithResilience } from "./geminiResilient";
 
 interface WebSearchResult {
   sources: Array<{ title: string; url: string }>;
@@ -14,13 +15,12 @@ export async function searchOfficialWeb(
   const snippets: string[] = [];
 
   const locationContext = [district, state].filter(Boolean).join(" ");
-  const safeQuery = typeof query === "string" ? query : "";
-const cleanQuery = safeQuery.replace(/[^\w\s\u0900-\u097F]/gi, "").trim();
+  const cleanQuery = query.replace(/[^\w\s\u0900-\u097F]/gi, " ").trim();
 
   // 1. Detect State Name accurately from parameter or query
   let detectedState = state?.trim() || "";
   if (!detectedState) {
-    const stateMatch = safequery.match(
+    const stateMatch = query.match(
       /(उत्तर\s*प्रदेश|यूपी|UP|Uttar\s*Pradesh|मध्य\s*प्रदेश|एमपी|MP|Madhya\s*Pradesh|बिहार|Bihar|राजस्थान|Rajasthan|दिल्ली|Delhi|महाराष्ट्र|Maharashtra|हरियाणा|Haryana|पंजाब|Punjab|उत्तराखंड|Uttarakhand|झारखंड|Jharkhand|गुजरात|Gujarat|छत्तीसगढ़|Chhattisgarh|पश्चिम\s*बंगाल|West Bengal)/i
     );
     if (stateMatch) {
@@ -222,61 +222,76 @@ const cleanQuery = safeQuery.replace(/[^\w\s\u0900-\u097F]/gi, "").trim();
   }
 
   async function fetchDdG(q: string) {
-    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-      },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    if (!res.ok) return [];
+    try {
+      const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+        },
+      });
 
-    const html = await res.text();
-    const urlMatches = [
-      ...html.matchAll(/<a class="result__url" href="([^"]+)">([^<]+)<\/a>/g),
-    ];
-    const snippetMatches = [
-      ...html.matchAll(/<a class="result__snippet[^"]*"[^>]*>(.*?)<\/a>/gs),
-    ];
-    const titleMatches = [
-      ...html.matchAll(/<a class="result__title"[^>]*>(.*?)<\/a>/gs),
-    ];
+      if (!res.ok) return [];
 
-    const results: Array<{ title: string; url: string; snippet: string }> = [];
-    for (let i = 0; i < urlMatches.length && i < 6; i++) {
-      let rawUrl = urlMatches[i]?.[2]?.trim() || "";
-      if (rawUrl && !rawUrl.startsWith("http")) {
-        rawUrl = "https://" + rawUrl;
+      const html = await res.text();
+      const urlMatches = [
+        ...html.matchAll(/<a class="result__url" href="([^"]+)">([^<]+)<\/a>/g),
+      ];
+      const snippetMatches = [
+        ...html.matchAll(/<a class="result__snippet[^"]*"[^>]*>(.*?)<\/a>/gs),
+      ];
+      const titleMatches = [
+        ...html.matchAll(/<a class="result__title"[^>]*>(.*?)<\/a>/gs),
+      ];
+
+      const results: Array<{ title: string; url: string; snippet: string }> = [];
+      for (let i = 0; i < urlMatches.length && i < 6; i++) {
+        let rawUrl = urlMatches[i]?.[2]?.trim() || "";
+        if (rawUrl && !rawUrl.startsWith("http")) {
+          rawUrl = "https://" + rawUrl;
+        }
+        const rawTitle = titleMatches[i]?.[1]?.replace(/<[^>]+>/g, "").trim() || rawUrl;
+        const rawSnippet = snippetMatches[i]?.[1]?.replace(/<[^>]+>/g, "").trim() || "";
+
+        if (rawUrl && rawSnippet.length > 10) {
+          results.push({
+            title: rawTitle,
+            url: rawUrl,
+            snippet: rawSnippet,
+          });
+        }
       }
-      const rawTitle = titleMatches[i]?.[1]?.replace(/<[^>]+>/g, "").trim() || rawUrl;
-      const rawSnippet = snippetMatches[i]?.[1]?.replace(/<[^>]+>/g, "").trim() || "";
-
-      if (rawUrl && rawSnippet.length > 10) {
-        results.push({
-          title: rawTitle,
-          url: rawUrl,
-          snippet: rawSnippet,
-        });
-      }
+      return results;
+    } catch {
+      return [];
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return results;
   }
 
   try {
-    // 5a. Directly query official India Code repository API for authentic statutory records
-    try {
-      const indiaCodeSearchQuery = detectedActName
-        ? `${detectedActName} ${detectedSectionNumber ? `Section ${detectedSectionNumber}` : ""}`.trim()
-        : cleanQuery;
-      const icUrl = `https://indiacode.gov.in/server/api/discover/search/objects?query=${encodeURIComponent(indiaCodeSearchQuery)}&size=4`;
-      const icRes = await fetch(icUrl, {
-        headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" },
-      });
-      if (icRes.ok) {
+    // 5a. Primary Government Source Search: Execute India Code & Gov search in parallel with 5-second timeout
+    const indiaCodeSearchQuery = detectedActName
+      ? `${detectedActName} ${detectedSectionNumber ? `Section ${detectedSectionNumber}` : ""}`.trim()
+      : cleanQuery;
+    const icUrl = `https://indiacode.gov.in/server/api/discover/search/objects?query=${encodeURIComponent(indiaCodeSearchQuery)}&size=4`;
+
+    const icController = new AbortController();
+    const icTimeoutId = setTimeout(() => icController.abort(), 5000);
+
+    const icPromise = fetch(icUrl, {
+      signal: icController.signal,
+      headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" },
+    })
+      .then(async (icRes) => {
+        if (!icRes.ok) return;
         const icData = await icRes.json();
         const icObjects = icData._embedded?.searchResult?._embedded?.objects || [];
         for (const obj of icObjects) {
@@ -289,14 +304,17 @@ const cleanQuery = safeQuery.replace(/[^\w\s\u0900-\u097F]/gi, "").trim();
             snippets.unshift(`[आधिकारिक स्रोत: India Code (indiacode.gov.in)] अधिनियम/अधिसूचना: ${actTitle}, आधिकारिक लिंक: ${officialUri}`);
           }
         }
-      }
-    } catch {
-      // Non-blocking fallback
-    }
+      })
+      .catch(() => {
+        return [];
+      })
+      .finally(() => {
+        clearTimeout(icTimeoutId);
+      });
 
-    // Run up to 3 targeted queries to retrieve isolated provisions
-    const selectedQueries = queryList.slice(0, 3);
-    for (const q of selectedQueries) {
+    // Primary official queries focused on government sources (run in parallel)
+    const primaryQueries = queryList.slice(0, 2);
+    const ddgPromises = primaryQueries.map(async (q) => {
       const qResults = await fetchDdG(q);
       for (const r of qResults) {
         if (!sources.some((s) => s.url === r.url)) {
@@ -304,8 +322,9 @@ const cleanQuery = safeQuery.replace(/[^\w\s\u0900-\u097F]/gi, "").trim();
           snippets.push(`[स्रोत: ${r.url}] ${r.snippet}`);
         }
       }
-      if (sources.length >= 6) break;
-    }
+    });
+
+    await Promise.allSettled([icPromise, ...ddgPromises]);
   } catch (error) {
     console.error("Web search error in searchOfficialWeb:", error);
   }
@@ -347,6 +366,18 @@ export function resolvePenalSubClause(
   punishment: string = "",
   fine: string = ""
 ): string {
+  if (!sectionNumber) return "";
+
+  // If multiple sections are listed with commas, resolve each one individually
+  if (sectionNumber.includes(",") || sectionNumber.includes(" व ") || sectionNumber.includes(" और ")) {
+    const separator = sectionNumber.includes(",") ? /,\s*/ : /(?:\s+व\s+|\s+और\s+)/;
+    return sectionNumber
+      .split(separator)
+      .map((s) => resolvePenalSubClause(s.trim(), actName, punishment, fine))
+      .filter(Boolean)
+      .join(", ");
+  }
+
   const combined = `${sectionNumber} ${actName} ${punishment} ${fine}`.toLowerCase();
   const hasPenaltyOrFine =
     Boolean(punishment || fine) &&
@@ -364,6 +395,11 @@ export function resolvePenalSubClause(
       return "धारा 111(2)(a)";
     }
     return "धारा 111(2)(b)";
+  }
+
+  // 1b. BNS Section 137 (Kidnapping / व्यपहरण): 137(1) is definition, 137(2) is penal sub-clause
+  if (isBns && /(?:धारा\s*137\b|section\s*137\b|137\(1\))/i.test(sectionNumber)) {
+    return "धारा 137(2)";
   }
 
   // 2. BNS Section 303 (Theft): 303(1) is definition, 303(2) is penalty
@@ -444,9 +480,10 @@ export async function processLegalResearch(
     district?: string;
     userFacts?: string;
     generateDraft?: boolean;
+    language?: string;
   }
 ) {
-  const { question, state, district, userFacts, generateDraft } = params;
+  const { question, state, district, userFacts, generateDraft, language = "hi" } = params;
   const verificationDate = getVerificationDateString();
 
   // Perform real-time internet search
@@ -470,11 +507,13 @@ export async function processLegalResearch(
  =======================================================
  SYSTEM ARCHITECTURE RULE: UNIVERSAL ACCURACY ENGINE
  =======================================================
- कोर प्रॉम्प्ट और डेटा एक्सट्रैक्शन पाइपलाइन में ये 2 स्थायी नियम हमेशा के लिए अनिवार्य व बाध्यकारी हैं:
+ कोर प्रॉम्प्ट और डेटा एक्सट्रैक्शन पाइपलाइन में ये नियम हमेशा के लिए अनिवार्य व बाध्यकारी हैं:
 
  1. GLOBAL SUB-CLAUSE RULE (सटीक उपधारा प्राथमिकता):
  किसी भी कानून (BNS, BNSS, IPC, CrPC, या राज्य भू-राजस्व कोड) के तहत, जब भी सज़ा (Punishment) या जुर्माने (Fine) का उल्लेख हो, तो मुख्य धारा या परिभाषा उपधारा (जैसे 111(1)) कभी न दिखाएं। हमेशा सीधे वास्तविक दंडात्मक उपधारा (Penal Sub-clause, जैसे 111(2)(a), 303(2)) को ही 'संबंधित धारा' में रेंडर करें।
- • BNS उदाहरण:
+ • BNS व BNSS STRICT RULES:
+   - व्यपहरण / अपहरण (Kidnapping) में सज़ा: धारा 137(1) (परिभाषा) कभी न दिखाएं; हमेशा सीधे वास्तविक दंडात्मक उपधारा धारा 137(2) (BNS Section 137(2)) ही रेंडर करें।
+   - अपहृत व्यक्ति या अवैध बंधक की बरामदगी (Recovery of kidnapped / wrongfully confined person): कानूनी तलाशी व बरामदगी हेतु अनिवार्य रूप से BNSS धारा 100 (पूर्व CrPC 97) के तहत सक्षम मजिस्ट्रेट द्वारा तलाशी वारंट (Search Warrant for recovery) का सख्त नियम लागू करें।
    - संगठित अपराध में सज़ा: धारा 111(1) (परिभाषा) कभी न दिखाएं; हमेशा धारा 111(2)(a) (मृत्यु की दशा में) या 111(2)(b) (अन्य मामलों में) रेंडर करें।
    - चोरी में सज़ा: धारा 303(1) (परिभाषा) कभी न दिखाएं; हमेशा धारा 303(2) (दंडात्मक उपधारा) रेंडर करें।
    - स्नैचिंग में सज़ा: धारा 304(2) रेंडर करें (धारा 304(1) केवल परिभाषा है)।
@@ -484,32 +523,46 @@ export async function processLegalResearch(
 
  2. GLOBAL VERIFICATION GATE (स्वतः प्रमाणीकरण):
  यदि किसी भी धारा, उपधारा, सज़ा या राज्य संशोधन में 1% भी संशय हो, तो बिना पूछे स्वतः 'isVerified = false' ट्रिगर करो और पूरा फॉर्मेट ब्लॉक करके लाल चेतावनी कार्ड (STATUS: OVERALL RESULT: FAIL) दिखाओ। केवल 100% गजट-पुष्ट डेटा पर ही लेख अनलॉक होगा।
-3. STRICT SECTION OVERRIDES (MANDATORY):
-- Kidnapping: For any query related to 'Kidnapping', 'विधिपूर्ण संरक्षण से व्यपहरण', or taking a child away from a lawful guardian, you MUST strictly use BNS Section 137 (not 140).
-- Search Warrant / Recovery of Person: For queries regarding the recovery of a confined person or child (बच्चे की बरामदगी हेतु वारंट), you MUST strictly use BNSS Section 100 (not 97).
 
-4. UNIVERSAL DRAFT BILL FIREWALL (APPLIES TO ALL CRIMES):
-- Never rely on your internal training memory for BNS, BNSS, or BSA section numbers, as you might confuse the August 2023 Draft Bills with the Final December 2023 Enacted Acts.
-- ALWAYS extract the section numbers strictly from the 'Web Search Findings' (indiacode.gov.in) provided in the prompt context.
+ =======================================================
+ [SPEED OPTIMIZATION PROTOCOL (एकल-पास गति अनुकूलन)]
+ =======================================================
+ - Do not run multiple audit loops.
+ - Perform the self-correction and Format B verification in a single pass (एक ही बार में चेक करो).
+ - Generate the final response as fast as possible without unnecessary background retries.
+ - Keep the search focused only on primary government sources to save time.
 
- 5. NATURAL LANGUAGE QUERY MAPPING (आम बोलचाल की भाषा सपोर्ट):
+ =======================================================
+ [UNIVERSAL SELF-CORRECTION PROTOCOL (सार्वभौमिक स्व-सुधार प्रोटोकॉल)]
+ =======================================================
+ 1. Identify the Crime/Issue:
+ यूजर जो भी सवाल पूछे (जैसे चोरी, जमीन कब्जा, ऑनलाइन फ्रॉड, या पेमेंट विवाद), सबसे पहले पहचानो कि वह किस कानून (BNS, BNSS, BSA या किसी अन्य एक्ट) के तहत आता है।
+ 2. Check Completeness (Self-Audit / स्व-लेखापरीक्षण):
+ उस कानून से जुड़ी धाराओं का जवाब तैयार करने के बाद, खुद चेक करो कि क्या तुम्हारे पास उसका पूरा और सटीक सरकारी पाठ (Official Gazette Text) शामिल है या नहीं। अगर किसी भी धारा में थोड़ी सी भी कमी या संशय (Uncertainty) लगे, तो रुक जाओ।
+ 3. Auto-Correction & Fetch:
+ संशय होने पर इंटरनेट से किसी भी आम ब्लॉग या अनवेरिफाइड न्यूज़ आर्टिकल को मत पढ़ो। उसकी जगह तुरंत केवल 'indiacode.nic.in' / 'indiacode.gov.in', 'egazette.gov.in' या संबंधित आधिकारिक सरकारी वेबसाइट से उस अपराध की सही और पूरी धारा ढूंढकर अपने जवाब को खुद ही सुधार (Self-Correct) लो।
+ 4. Format B Compliance (Strict Rules):
+ अपने अंतिम जवाब को हमेशा 'Format B' के 4 अनिवार्य नियमों के अनुसार ही सेट करो:
+ (i) समस्या का सार लिखें (No Copy-Paste): Point 1 में यूजर के पूरे सवाल को कभी कॉपी-पेस्ट न करें, उसे 2-3 बुलेट पॉइंट्स में संक्षेप (Summary) में लिखें।
+ (ii) सटीक समाधान दें (Be Specific): Point 2 व 5 में 'नजदीकी कार्यालय' या 'संबंधित थाना' जैसे गोलमोल जवाब न दें। सटीक पोर्टल (जैसे RBI CMS, cybercrime.gov.in), हेल्पलाइन (1930, 112) और अधिकारी (जैसे Nodal Officer, Banking Ombudsman, Cyber Nodal) लिखें।
+ (iii) सटीक धाराएं बताएं (Specific Laws): Point 3 में केवल 'BNS 2023' लिखकर न छोड़ें। अपराध की प्रकृति के अनुसार सटीक दंडात्मक धाराएं व उपधाराएं (जैसे BNS 318(4), IT Act 66D, BNS 303(2), NI Act 138 आदि) अनिवार्य रूप से लिखें।
+ (iv) ट्रिकी सवाल (Edge Cases): यदि सवाल में कोई जटिलता है (जैसे देरी/Limitation होना, मेडिकल इमरजेंसी, बैंक का मना करना, FIR दर्ज न करना), तो उसका व्यावहारिक कानूनी समाधान (जैसे BNSS 175(3)/175(4), Limitation Act धारा 5) और अपवाद (Exceptions) जरूर बताएं।
+ 5. Final Safeguard:
+ यदि आधिकारिक प्राथमिक वैधानिक स्रोत से 100% पुष्ट न हो सके, तो कभी भी अनुमान मत लगाओ; स्थिति = NOT VERIFIED / FAIL रखें।
+
+ 3. NATURAL LANGUAGE QUERY MAPPING (आम बोलचाल की भाषा सपोर्ट):
  यूज़र को कोई कानूनी धारा या जटिल शब्द लिखने की ज़रूरत नहीं है।
  जब कोई नागरिक सीधी आम बोलचाल में अपनी समस्या लिखे (उदा: "मेरी बाइक चोरी हो गई", "पड़ोसी गाली-गलौज कर रहा है", "जमीन पर कब्जा कर लिया", "धमकी मिल रही है", "पैसे कट गए"):
  • सिस्टम स्वतः उसके पीछे का सही अपराध व कानूनी वर्गीकरण पहचाने।
- • सही कानून (BNS / BNSS / राज्य राजस्व संहिता / विशेष अधिनियम) की सटीक दंडात्मक उपधारा से मैप करे (जैसे चोरी → BNS 303(2), गाली-गलौज → BNS 352, धमकी → BNS 351(2), कब्जा → राज्य राजस्व संहिता व BNS 329(3), ठगी/साइबर फ्रॉड → BNS 318(4) व IT Act 66D, मारपीट → BNS 115(2)/117(2))।
+ • सही कानून (BNS / BNSS / राज्य राजस्व संहिता / विशेष अधिनियम) की सटीक दंडात्मक उपधारा से मैप करे (जैसे व्यपहरण/अपहरण (Kidnapping) → BNS 137(2), बरामदगी (Recovery) → BNSS 100, चोरी → BNS 303(2), गाली-गलौज → BNS 352, धमकी → BNS 351(2), कब्जा → राज्य राजस्व संहिता व BNS 329(3), ठगी/साइबर फ्रॉड → BNS 318(4) व IT Act 66D, मारपीट → BNS 115(2)/117(2))।
  • OUTPUT SIMPLICITY: परिणाम में सबसे पहले आम नागरिक की भाषा में स्पष्ट, सीधी समझाइश (क्या हुआ? और अब क्या कदम उठाएं?) प्रदान करे। कानूनी धाराएं, दंडात्मक उपधारा व वैधानिक साक्ष्य संदर्भ के रूप में नीचे सुव्यवस्थित रहें।
-6. स्मार्ट फीडबैक लूप और फैक्ट-चेक (Smart Feedback & Fact-Check):
-• फीडबैक लाइन: प्रत्येक उत्तर या 'Format B' के अंत में यह पंक्ति अनिवार्य रूप से जोड़ी जाएगी:
-"🙏 क्या यह कानूनी जानकारी आपके लिए मददगार थी? यदि आपको इसमें कोई कमी लगे तो कृपया रिप्लाई में बताएं।"
-• सुरक्षा नियम (Safeguard): यदि यूजर फीडबैक में कहता है कि जवाब गलत है और कोई नई धारा या कानूनी तर्क प्रस्तुत करता है, तो बिना सत्यापन के स्वीकार नहीं किया जाएगा। सबसे पहले वैधानिक डेटाबेस (BNS/BNSS/BSA, RBI परिपत्र आदि) से यूजर की जानकारी का सत्यापन किया जाएगा।
-• स्थिति 1 (यदि यूजर सही है): यदि यूजर का फीडबैक कानूनी रूप से सही है, तो विनम्रता से त्रुटि स्वीकार कर नया व सही जवाब जनरेट किया जाएगा।
-• स्थिति 2 (यदि यूजर भ्रामक/गलत जानकारी दे रहा है): गलती बिल्कुल स्वीकार नहीं की जाएगी। बहुत विनम्रता लेकिन दृढ़ता से यूजर को बताया जाएगा: "क्षमा करें, लेकिन कानूनी दृष्टिकोण से आपकी यह जानकारी सही नहीं है। भारतीय न्याय संहिता/संबंधित कानून के तहत वास्तविक प्रावधान यह है..." और अपने सही व प्रमाणित जवाब पर ही टिका रहा जाएगा।
 
  नागरिक का कानूनी सवाल/समस्या: "${question}"
- ${state ? `राज्य: ${state}` : "राज्य: उपलब्ध नहीं (यदि आवश्यक हो तो पूछें)"}
+ ${state ? `राज्य: ${state}` : "राज्य: उपलब्ध नहीं (यदि कानून या राजस्व नियम राज्य-विशिष्ट हों, तो नागरिक को विनम्रता से राज्य बताने का वैकल्पिक सुझाव दें)"}
  ${district ? `जिला: ${district}` : "जिला: उपलब्ध नहीं"}
  ${userFacts ? `नागरिक द्वारा बताए गए तथ्य: ${userFacts}` : ""}
  ${generateDraft ? `ड्राफ्ट की मांग: हाँ, तत्काल औपचारिक आवेदन/FIR ड्राफ्ट तैयार करें` : ""}
+ भाषा (Language Requirement): ${language && language !== "hi" ? `User has chosen '${language}'. Generate all human explanation, Format B, and legal descriptions primarily in ${language} (while keeping official statutory Act names and section titles clear and accurate).` : "हिंदी (Hindi)"}
  
  ${isVerificationMode ? `-------------------------------------------------------
  🚨 [VERIFICATION-MODE OUTPUT CONTROL ACTIVE]
@@ -723,15 +776,19 @@ SOURCE RULES:
 
 NEIGHBOURING-SECTION ISOLATION (सख्त अलगाव नियम):
 When the query contains a section number or when search results contain several nearby sections, or when the user's question involves multiple issues:
-- Treat every section as a separate legal provision.
+- Treat unrelated sections as separate legal provisions (उदा: भूमि सीमांकन धारा 129 को क्षतिपूर्ति धारा 130 से न मिलाएं)।
 - Verify each section independently.
-- Never combine the title/subject/text/punishment of Section A with Section B.
-- Do not select a section merely because its keywords are similar.
-- The section number, title and text must all refer to the SAME provision.
-- If the search result contains multiple sections, isolate the requested/relevant section before extracting any legal conclusion.
+- Never combine the title/subject/text/punishment of an unrelated Section A with Section B.
+
+MULTIPLE SECTIONS MANDATE (एक से अधिक धाराओं के लिए अनिवार्य नियम):
+यदि किसी मामले में एक से अधिक धाराएं (Multiple sections) लागू होती हैं (जैसे डिजिटल अरेस्ट, साइबर फ्रॉड, ऑनलाइन ठगी, प्रतिरूपण, जबरन वसूली आदि), तो JSON के section, punishment, और fine फील्ड्स में सभी मुख्य धाराओं और उनकी सजाओं को कॉमा (,) लगाकर या संक्षेप में मिलाकर अनिवार्य रूप से लिखें। JSON में डमी टेक्स्ट या डिफ़ॉल्ट लाइन ('इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है') का प्रयोग सख्त वर्जित है।
+उदाहरण (डिजिटल अरेस्ट / ऑनलाइन फ्रॉड):
+• section (या sectionNumber): "BNS 318(4), BNS 319(2), IT Act 66D, BNS 308(2)"
+• punishment: "BNS 318(4): 7 वर्ष तक कारावास; BNS 319(2): 5 वर्ष तक कारावास; IT Act 66D: 3 वर्ष तक कारावास; BNS 308(2): 2 से 7 वर्ष कारावास"
+• fine: "BNS 318(4): जुर्माना; BNS 319(2): जुर्माना; IT Act 66D: ₹1,00,000 तक जुर्माना"
+
 - When a question involves multiple distinct issues (such as boundary demarcation AND destruction/removal of boundary marks):
-  * Do NOT merge them into one provision.
-  * State each provision separately with its own exact section number, exact title, subject, and its own punishment/fine (or explicit "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।").
+  * State each provision separately with its own exact section number, exact title, subject, and its own punishment/fine (or explicit "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।" only when no punishment exists in law).
 
 EXACT SUBJECT MATCH:
 - Before returning a section, verify that the actual subject of the official provision matches the user's legal question.
@@ -805,20 +862,19 @@ FOR STATE-SPECIFIC ANSWERS, SHOW THIS EXACT STRUCTURE IN FORMAT B (भाग 3):
 • धारा का विषय: [सटीक धारा का शीर्षक/विषय]
 
 🔴 सजा:
-• केवल तभी दिखाएँ जब उसी verified provision में punishment (कारावास) हो।
-यदि उस सटीक धारा में कोई सजा निर्धारित नहीं है, तो अनिवार्य रूप से यह लिखें:
-"इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।"
+• यदि उसी verified provision में punishment (कारावास) हो तो दिखाएँ।
+• यदि मामले में एक से अधिक धाराएं (Multiple sections) लागू होती हैं, तो सभी मुख्य धाराओं और उनकी सजाओं को कॉमा (,) लगाकर या मिलाकर अनिवार्य रूप से लिखें।
+• 'इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।' केवल तभी लिखें जब उस प्रावधान में वास्तव में कानूनन कोई दंड न हो (जैसे केवल प्रशासनिक सीमांकन)।
 
 🟠 जुर्माना:
-• केवल तभी दिखाएँ जब उसी verified provision में fine/penalty हो।
-यदि उस सटीक धारा में कोई जुर्माना निर्धारित नहीं है, तो अनिवार्य रूप से यह लिखें:
-"इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।"
+• यदि उसी verified provision में fine/penalty हो तो दिखाएँ।
+• यदि मामले में एक से अधिक धाराएं (Multiple sections) लागू होती हैं, तो सभी मुख्य धाराओं के जुर्माने को कॉमा (,) लगाकर अनिवार्य रूप से लिखें।
+• 'इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।' केवल तभी लिखें जब उस प्रावधान में वास्तव में कोई जुर्माना न हो।
 
 Do NOT invent or estimate any fine amount.
 
 FOR CENTRAL LAWS:
-सजा व जुर्माना उसी धारा से लें। यदि उस धारा में सजा या जुर्माना नहीं है, तो लिखें:
-"इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।"
+सजा व जुर्माना उसी धारा से लें। यदि एक से अधिक धाराएं लागू हैं, तो सभी धाराओं की सजाएं व जुर्माने कॉमा लगाकर लिखें। डमी टेक्स्ट का प्रयोग न करें।
 
 🟢 क्या करें:
 • पहला कदम: [पहला जरूरी व्यावहारिक कदम]
@@ -835,22 +891,22 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
 =======================================================
 {
   "legalProblem": "समस्या का 1-2 पंक्तियों में सरल हिंदी विवरण",
-  "applicableLaw": "वर्तमान लागू धारा व कानून (उदा: धारा 24 उत्तर प्रदेश राजस्व संहिता, 2006)",
+  "applicableLaw": "वर्तमान लागू धाराएं व कानून (उदा: BNS 318(4), BNS 319(2), IT Act 66D)",
   "legalSectionDetails": {
-    "actName": "कानून/Code का पूरा नाम",
-    "sectionNumber": "धारा संख्या व उपधारा",
-    "sectionTitle": "धारा का सटीक विषय / शीर्षक (Section Title)",
+    "actName": "कानून/Code का पूरा नाम (उदा: भारतीय न्याय संहिता, 2023 व सूचना प्रौद्योगिकी अधिनियम, 2000)",
+    "sectionNumber": "धारा संख्या व उपधारा — यदि एक से अधिक धाराएं लागू हों तो सभी मुख्य धाराएं कॉमा लगाकर अनिवार्य रूप से लिखें (उदा: BNS 318(4), BNS 319(2), IT Act 66D)",
+    "sectionTitle": "धारा का सटीक विषय / शीर्षक (उदा: धोखाधड़ी, प्रतिरूपण द्वारा छल व साइबर अपराध)",
     "sectionAbout": "धारा किस बारे में है",
     "applicableCondition": "किस स्थिति में लागू हो सकती है (तथ्य व परिस्थितियां)",
     "state": "राज्य का नाम (यदि राज्य कानून हो या राज्य संदर्भ हो, अन्यथा 'केंद्र/अखिल भारतीय')",
     "isStateLaw": true_या_false,
     "hasPunishmentInProvision": true_या_false,
     "hasFineInProvision": true_या_false,
-    "punishment": "सजा विवरण (यदि उसी धारा में हो, अन्यथा 'इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।')",
-    "minPunishment": "न्यूनतम सजा (यदि उसी धारा में हो, अन्यथा 'इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।')",
-    "maxPunishment": "अधिकतम सजा व प्रकृति (यदि उसी धारा में हो, अन्यथा 'इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।')",
+    "punishment": "सजा विवरण — यदि एक से अधिक धाराएं लागू होती हैं, तो सभी मुख्य धाराओं और उनकी सजाओं को कॉमा (,) लगाकर या संक्षेप में मिलाकर अनिवार्य रूप से लिखें (उदा: BNS 318(4): 7 वर्ष तक कारावास; BNS 319(2): 5 वर्ष तक कारावास; IT Act 66D: 3 वर्ष तक कारावास)। JSON में डमी टेक्स्ट या डिफ़ॉल्ट लाइन का प्रयोग सख्त वर्जित है। केवल तभी 'इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।' लिखें जब वास्तव में कोई दंड न हो (जैसे केवल सीमांकन)।",
+    "minPunishment": "न्यूनतम सजा विवरण या 'कानून में न्यूनतम निर्धारित नहीं'",
+    "maxPunishment": "अधिकतम सजा व प्रकृति — यदि एक से अधिक धाराएं लागू हों तो सभी मुख्य धाराओं की अधिकतम सजाएं कॉमा लगाकर लिखें (उदा: BNS 318(4): 7 वर्ष, IT Act 66D: 3 वर्ष)। डमी टेक्स्ट न लिखें।",
     "punishmentNature": "सजा की प्रकृति",
-    "fineAmount": "सत्यापित जुर्माना राशि (यदि उसी धारा में हो, अन्यथा 'इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।')",
+    "fineAmount": "सत्यापित जुर्माना राशि — यदि एक से अधिक धाराएं लागू हों तो सभी मुख्य धाराओं के जुर्माने कॉमा (,) लगाकर लिखें (उदा: BNS 318(4): जुर्माना; IT Act 66D: ₹1,00,000 तक जुर्माना)। डमी टेक्स्ट न लिखें।",
     "fineOtherCondition": "अन्य शर्त (उदा: जुर्माना अथवा दोनों)",
     "firstStep": "पहला जरूरी कदम",
     "nextStep": "अगला व्यावहारिक कदम (लिखित पावती लेना)",
@@ -865,7 +921,7 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
     "lawType": "राज्य कानून (State Law) / केंद्रीय कानून (Central Law)"
   },
   "safestNextStep": "सुरक्षित व्यावहारिक कदम",
-  "formatBContent": "Justice Ji का पूरा Format B लेख जिसमें <u>[विषय]</u>, 1. समस्या क्या है?, 2. क्या करें?, 3. संबंधित कानून/धारा (राज्य कानून होने पर: ⚖️ संबंधित कानून, • राज्य:, • कानून/Code:, • धारा:, • धारा का विषय:, 🔴 सजा:, 🟠 जुर्माना: (यदि सजा/जुर्माना उस धारा में न हो तो 'इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।' लिखें), 🟢 क्या करें:), 4. जरूरी कागज़/सबूत, 5. कहाँ जाएँ?, 6. वर्तमान संपर्क जानकारी, 7. आगे क्या करें?, ध्यान रखें:, स्रोत/Verification:)",
+  "formatBContent": "Justice Ji का पूरा Format B लेख strictly पालन करते हुए: <u>[विषय]</u>, 1. समस्या क्या है? (No Copy-Paste: 2-3 बुलेट पॉइंट्स में समस्या का सार), 2. क्या करें? (सटीक पोर्टल जैसे RBI CMS / cybercrime.gov.in, हेल्पलाइन 1930/112 व लिखित पावती लेना), 3. संबंधित कानून/धारा (सटीक धाराएं जैसे BNS 318(4), BNS 303(2), IT Act 66D, NI Act 138; 🔴 सजा: व 🟠 जुर्माना: में केवल दंडात्मक उपधारा ही), 4. जरूरी कागज़/सबूत, 5. कहाँ जाएँ? (सटीक प्राधिकारी जैसे Nodal Officer, Banking Ombudsman, Cyber Cell Incharge), 6. वर्तमान संपर्क जानकारी (सत्यापित हेल्पलाइन व .gov.in लिंक), 7. आगे क्या करें?, ⚡ ट्रिकी परिस्थितियों का समाधान (Edge cases जैसे देरी, बैंक का मना करना, पुलिस का FIR न लिखना), ध्यान रखें:, स्रोत/Verification:)",
   "requiredDocuments": ["दस्तावेज 1", "दस्तावेज 2", "साक्ष्य 3"],
   "authorityAndForum": "सक्षम विभाग / राजस्व न्यायालय / थाना / आयोग / न्यायालय",
   "verifiedContacts": [
@@ -889,44 +945,31 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
   let jsonResult: any = null;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: prompt,
-      config: {
-        temperature: 0.2,
-      },
-    });
+    const { text: responseText, error: genError } = await generateContentWithResilience(
+      ai,
+      prompt,
+      { temperature: 0.1, preferredModel: "gemini-3.1-flash-lite" }
+    );
 
-    const responseText = response.text || "";
-    // Clean JSON from potential markdown wrapping
-    const jsonMatch =
-      responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [
-        null,
-        responseText,
-      ];
-    const candidate = jsonMatch[1]?.trim() || responseText.trim();
-    jsonResult = JSON.parse(candidate);
-  } catch (err: any) {
-    console.warn("Falling back to gemini-3.1-flash-lite or retry:", err?.message);
-    try {
-      const fallbackResponse = await ai.models.generateContent({
-        model: "gemini-3.1-flash-lite",
-        contents: prompt,
-        config: {
-          temperature: 0.2,
-        },
-      });
-      const text = fallbackResponse.text || "";
+    if (responseText) {
+      // Clean JSON from potential markdown wrapping
       const jsonMatch =
-        text.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, text];
-      jsonResult = JSON.parse(jsonMatch[1]?.trim() || text.trim());
-    } catch (fallbackErr) {
-      console.error("JSON parse failure in processLegalResearch:", fallbackErr);
+        responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [
+          null,
+          responseText,
+        ];
+      const candidate = jsonMatch[1]?.trim() || responseText.trim();
+      jsonResult = JSON.parse(candidate);
+    } else {
+      throw genError || new Error("No response generated from AI models");
+    }
+  } catch (err: any) {
+    console.info("Using resilient fallback structured response in processLegalResearch:", err?.message || "Model timeout or rate limit");
       // Construct a safe structured response
       jsonResult = {
         legalProblem: `कानूनी प्रश्न: ${question}`,
         applicableLaw: "भारतीय न्याय संहिता, 2023 (BNS) एवं सुसंगत अधिनियम",
-        formatBContent: `<u>${question}</u>\n\n1. समस्या क्या है?\n• ${question}\n\n2. क्या करें?\n• तत्काल नजदीकी संबंधित कार्यालय या हेल्पलाइन पर संपर्क करें।\n\n3. संबंधित कानून/धारा\n• वर्तमान कानून: BNS 2023 / Consumer Protection Act 2019 / विशेष अधिनियम।\n\n4. जरूरी कागज़/सबूत\n• पहचान पत्र, लेन-देन की रसीद, संचार/चैट रिकॉर्ड।\n\n5. कहाँ जाएँ?\n• संबंधित थाना या सक्षम विधिक प्राधिकरण।\n\n6. वर्तमान संपर्क जानकारी\n• राष्ट्रीय आपातकालीन हेल्पलाइन: 112\n• राष्ट्रीय विधिक सेवा (NALSA): 15100\n• पोर्टल: https://nalsa.gov.in\n\n7. आगे क्या करें?\n• लिखित शिकायत दर्ज कर पावती (Receipt) अवश्य लें।\n\nध्यान रखें:\n• किसी भी अपुष्ट फोन नंबर पर विश्वास न करें, केवल आधिकारिक सरकारी पोर्टल देखें।`,
+        formatBContent: `<u>${question}</u>\n\n1. समस्या क्या है?\n• ${question}\n\n2. क्या करें?\n• तत्काल नजदीकी संबंधित कार्यालय या हेल्पलाइन पर संपर्क करें।\n\n3. संबंधित कानून/धारा\n• वर्तमान कानून: BNS 2023 / Consumer Protection Act 2019 / विशेष अधिनियम।\n\n4. जरूरी कागज़/सबूत\n• पहचान पत्र, लेन-देन की रसीद, संचार/चैट रिकॉर्ड।\n\n5. कहाँ जाएँ?\n• संबंधित थाना या सक्षम विधिक प्राधिकरण।\n\n6. वर्तमान संपर्क जानकारी\n• राष्ट्रीय आपातकालीन हेल्पलाइन: 112\n• राष्ट्रीय विधिक सेवा (NALSA): 15100\n• पोर्टल: https://nalsa.gov.in\n\n7. आगे क्या करें?\n• लिखित शिकायत दर्ज कर पावती (Receipt) अवश्य लें।\n\nध्यान रखें:\n• किसी भी अपुष्ट फोन नंबर पर विश्वास न करें, केवल आधिकारिक सरकारी पोर्टल देखें。\n\n🙏 क्या यह कानूनी जानकारी आपके लिए मददगार थी? यदि आपको इसमें कोई कमी लगे तो कृपया रिप्लाई में बताएं।`,
         requiredDocuments: ["पहचान पत्र (Aadhaar/Voter ID)", "घटना/लेनदेन के साक्ष्य", "लिखित विवरण"],
         authorityAndForum: "संबंधित स्थानीय थाना या सक्षम विधिक प्राधिकरण",
         verifiedContacts: [
@@ -953,7 +996,6 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
         generatedDraft: "",
         isNewTopic: true,
       };
-    }
   }
 
   // Normalize and strictly sanitize legalSectionDetails
@@ -974,28 +1016,82 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
     /(?:सीमांकन|demarcation|सीमा\s*विवाद|boundary)/i.test(combinedSectionText);
 
   // Check if punishment is in the provision
-  const rawPunishment = String(
+  let rawPunishment = String(
     rawDetails.punishment || rawDetails.maxPunishment || ""
   ).trim();
-  const rawFine = String(rawDetails.fineAmount || "").trim();
+  let rawFine = String(rawDetails.fineAmount || "").trim();
+
+  // If formatBContent has punishment or fine details, extract them if rawDetails is empty or contains dummy text
+  const formatB = jsonResult.formatBContent || "";
+  const isCriminalOrPenalCase = /(?:डिजिटल\s*अरेस्ट|साइबर|ऑनलाइन|धोखाधड़ी|ठगी|जबरन\s*वसूली|extortion|cheating|fraud|chhal|प्रतिरूपण|bns\s*318|bns\s*319|66d|308|चोरी|डकैती|हत्या|मारपीट)/i.test(
+    `${question} ${combinedSectionText} ${formatB}`
+  );
+
+  if ((!rawPunishment || rawPunishment.includes("अलग से दंड") || rawPunishment.includes("निर्धारित नहीं")) && formatB.includes("🔴 सजा:")) {
+    const lines = formatB.split("\n").map((l) => l.trim());
+    const pIdx = lines.findIndex((l) => /🔴\s*सजा/i.test(l));
+    if (pIdx !== -1) {
+      const extractedP: string[] = [];
+      for (let i = pIdx + 1; i < lines.length && i < pIdx + 8; i++) {
+        if (/^[🟠🟢⚖️]/.test(lines[i]) || /^[4-7]\./.test(lines[i])) break;
+        if (lines[i] && !lines[i].includes("अलग से दंड") && !lines[i].includes("निर्धारित नहीं")) {
+          extractedP.push(lines[i].replace(/^[•\-\*]\s*/, ""));
+        }
+      }
+      if (extractedP.length > 0) {
+        rawPunishment = extractedP.join("; ");
+      }
+    }
+  }
+
+  if ((!rawFine || rawFine.includes("अलग से दंड") || rawFine.includes("निर्धारित नहीं")) && formatB.includes("🟠 जुर्माना:")) {
+    const lines = formatB.split("\n").map((l) => l.trim());
+    const fIdx = lines.findIndex((l) => /🟠\s*जुर्माना/i.test(l));
+    if (fIdx !== -1) {
+      const extractedF: string[] = [];
+      for (let i = fIdx + 1; i < lines.length && i < fIdx + 8; i++) {
+        if (/^[🟢⚖️🔴]/.test(lines[i]) || /^[4-7]\./.test(lines[i])) break;
+        if (lines[i] && !lines[i].includes("अलग से दंड") && !lines[i].includes("निर्धारित नहीं")) {
+          extractedF.push(lines[i].replace(/^[•\-\*]\s*/, ""));
+        }
+      }
+      if (extractedF.length > 0) {
+        rawFine = extractedF.join("; ");
+      }
+    }
+  }
+
+  // Also extract multiple sections from Format B if rawDetails had only single section or general name
+  if (formatB.includes("• धारा:")) {
+    const secMatch = formatB.match(/•\s*धारा:\s*([^\n]+)/i);
+    if (secMatch && secMatch[1] && (secMatch[1].includes(",") || secMatch[1].includes(" व "))) {
+      const multiSec = secMatch[1].trim();
+      if (!rawDetails.sectionNumber || !rawDetails.sectionNumber.includes(",")) {
+        rawDetails.sectionNumber = multiSec;
+      }
+    }
+  }
+
+  const hasRealPunishmentContent = /(?:वर्ष|साल|माह|महीने|कारावास|जेल|सश्रम|साधारण|मृत्यु|आजीवन|दंडनीय|punishment|imprisonment|\d+\s*वर्ष)/i.test(rawPunishment);
+  const hasRealFineContent = /(?:जुर्माना|रुपये|₹|लाख|हजार|शास्ति|penalty|fine|विवेक)/i.test(rawFine);
 
   const hasExplicitNoPunishment =
-    rawDetails.hasPunishmentInProvision === false ||
-    isDemarcationSection ||
-    rawPunishment.includes("अलग से दंड") ||
-    rawPunishment.includes("निर्धारित नहीं") ||
-    rawPunishment === "कोई सजा नहीं" ||
-    rawPunishment === "शून्य" ||
-    rawPunishment === "";
+    !hasRealPunishmentContent &&
+    (rawDetails.hasPunishmentInProvision === false ||
+      isDemarcationSection ||
+      rawPunishment.includes("अलग से दंड") ||
+      rawPunishment === "कोई सजा नहीं" ||
+      rawPunishment === "शून्य" ||
+      (!isCriminalOrPenalCase && (rawPunishment === "" || rawPunishment === "निर्धारित नहीं")));
 
   const hasExplicitNoFine =
-    rawDetails.hasFineInProvision === false ||
-    isDemarcationSection ||
-    rawFine.includes("अलग से दंड") ||
-    rawFine.includes("निर्धारित नहीं") ||
-    rawFine === "कोई जुर्माना नहीं" ||
-    rawFine === "शून्य" ||
-    rawFine === "";
+    !hasRealFineContent &&
+    (rawDetails.hasFineInProvision === false ||
+      isDemarcationSection ||
+      rawFine.includes("अलग से दंड") ||
+      rawFine === "कोई जुर्माना नहीं" ||
+      rawFine === "शून्य" ||
+      (!isCriminalOrPenalCase && (rawFine === "" || rawFine === "निर्धारित नहीं")));
 
   // Cross-check neighbouring sections for boundary marks/demarcation
   let neighbouringProvisionsNote = rawDetails.neighbouringProvisionsNote || "";
@@ -1065,17 +1161,25 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
       : rawPunishment,
     minPunishment: hasExplicitNoPunishment
       ? "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।"
-      : rawDetails.minPunishment || "कानून में न्यूनतम निर्धारित नहीं",
+      : rawDetails.minPunishment && !rawDetails.minPunishment.includes("अलग से दंड")
+        ? rawDetails.minPunishment
+        : hasRealPunishmentContent
+          ? "कानून के अनुसार विहित"
+          : "कानून में न्यूनतम निर्धारित नहीं",
     maxPunishment: hasExplicitNoPunishment
       ? "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।"
-      : rawDetails.maxPunishment || rawPunishment || "प्रावधान के अनुसार",
+      : rawDetails.maxPunishment && !rawDetails.maxPunishment.includes("अलग से दंड")
+        ? rawDetails.maxPunishment
+        : rawPunishment || "प्रावधान के अनुसार",
     punishmentNature: hasExplicitNoPunishment ? "" : rawDetails.punishmentNature || "",
     fineAmount: hasExplicitNoFine
       ? "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।"
-      : rawDetails.fineAmount || "अदालत के विवेक पर निर्भर",
+      : rawFine || rawDetails.fineAmount || "अदालत के विवेक पर निर्भर",
     fineOtherCondition: hasExplicitNoFine
       ? "इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।"
-      : rawDetails.fineOtherCondition || "सत्यापित धारा के अनुसार",
+      : rawDetails.fineOtherCondition && !rawDetails.fineOtherCondition.includes("अलग से दंड")
+        ? rawDetails.fineOtherCondition
+        : "सत्यापित धारा के अनुसार",
     firstStep:
       rawDetails.firstStep || "सक्षम अधिकारी या थाने में लिखित आवेदन प्रस्तुत करें",
     nextStep:
@@ -1111,15 +1215,15 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
     );
   }
 
-  if (hasExplicitNoPunishment && formattedB.includes("🔴 सजा:")) {
-    // Replace any punishment block with explicit no-punishment statement
+  if (hasExplicitNoPunishment && !hasRealPunishmentContent && !isCriminalOrPenalCase && formattedB.includes("🔴 सजा:")) {
+    // Replace any punishment block with explicit no-punishment statement only for non-penal provisions
     formattedB = formattedB.replace(
       /🔴\s*सजा:[^\n]*\n(?:[^\n]*\n)?(?=🟠|🟢|स्रोत|$)/i,
       "🔴 सजा:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
     );
   }
-  if (hasExplicitNoFine && formattedB.includes("🟠 जुर्माना:")) {
-    // Replace any fine block with explicit no-fine statement
+  if (hasExplicitNoFine && !hasRealFineContent && !isCriminalOrPenalCase && formattedB.includes("🟠 जुर्माना:")) {
+    // Replace any fine block with explicit no-fine statement only for non-penal provisions
     formattedB = formattedB.replace(
       /🟠\s*जुर्माना:[^\n]*\n(?:[^\n]*\n)?(?=🔴|🟢|स्रोत|$)/i,
       "🟠 जुर्माना:\n• इस धारा में अलग से दंड/जुर्माना निर्धारित नहीं है।\n"
@@ -1172,9 +1276,15 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
 
   const isOverallVerified = !hasAnyFailure;
 
-  // If hard failed, formatBContent must not render as a normal verified article - completely blocked with FAIL status
+  // If unverified, keep technical audit report strictly in backend console.log
   if (!isOverallVerified) {
-    formattedB = `STATUS: OVERALL RESULT: FAIL (${hardFailReason})\n\n[हार्ड-फेल गेट प्रवर्तन - Hard-Fail Gate Enforced]\n• 1% संशय / अप्रमाणित प्रावधान नियम लागू: किसी भी धारा, उपधारा, सज़ा या राज्य संशोधन में संशय होने पर कानूनी लेख पूर्णतः अवरुद्ध (Blocked) रहेगा।\n• वैधानिक स्थिति: आधिकारिक कानून / राज्य ई-गजट के 100% पुष्ट मूल पाठ के बिना यह सामग्री सत्यापित नहीं मानी जा सकती।\n• अनलॉक शर्त: केवल 100% गजट-पुष्ट डेटा प्राप्त होने पर ही लेख प्रदर्शित होगा।`;
+    console.log(`\n=================== [HARD-FAIL AUDIT REPORT (BACKEND ONLY)] ===================`);
+    console.log(`STATUS: OVERALL RESULT: FAIL (UNVERIFIED)`);
+    console.log(`धारा/प्रावधान: ${sanitizedSectionDetails.sectionNumber || question}`);
+    console.log(`कारण: ${hardFailReason}`);
+    console.log(`विस्तृत तकनीकी रिपोर्ट: Level 1 आधिकारिक वैधानिक साक्ष्य अपूर्ण या 1% संशय उपस्थित।`);
+    console.log(`नागरिक स्क्रीन: केवल शीर्ष बैज '⚠️ असत्यापित' दिखाया जाएगा; सलाह व FIR ड्राफ्ट अप्रतिबंधित रहेंगे।`);
+    console.log(`===============================================================================\n`);
   }
 
   // Ensure official sources and verification date are attached
@@ -1185,28 +1295,30 @@ OUTPUT FORMAT (केवल और केवल निम्नलिखित �
     legalProblem: jsonResult.legalProblem || question,
     applicableLaw: jsonResult.applicableLaw || sanitizedSectionDetails.sectionNumber,
     legalSectionDetails: sanitizedSectionDetails,
-    safestNextStep: isVerificationMode || !isOverallVerified
+    safestNextStep: isVerificationMode
       ? ""
       : (jsonResult.safestNextStep ||
          "संबंधित विभाग अथवा थाने में लिखित आवेदन प्रस्तुत कर मुहर लगी पावती (Receiving) अवश्य लें, अथवा NALSA 15100 पर निःशुल्क मार्गदर्शन लें।"),
-    formatBContent: formattedB,
-    requiredDocuments: isVerificationMode || !isOverallVerified
+    formatBContent: formattedB && !formattedB.includes("क्या यह कानूनी जानकारी आपके लिए मददगार थी")
+      ? formattedB.trim() + "\n\n🙏 क्या यह कानूनी जानकारी आपके लिए मददगार थी? यदि आपको इसमें कोई कमी लगे तो कृपया रिप्लाई में बताएं।"
+      : formattedB,
+    requiredDocuments: isVerificationMode
       ? []
       : (Array.isArray(jsonResult.requiredDocuments) ? jsonResult.requiredDocuments : []),
     authorityAndForum: jsonResult.authorityAndForum || sanitizedSectionDetails.authority,
-    verifiedContacts: isVerificationMode || !isOverallVerified
+    verifiedContacts: isVerificationMode
       ? []
       : (Array.isArray(jsonResult.verifiedContacts) ? jsonResult.verifiedContacts : []),
     officialSources: webData.sources,
     verificationDate,
     isOverallVerified,
     hardFailReason: !isOverallVerified ? hardFailReason : undefined,
-    needsStateOrDistrict: isVerificationMode || !isOverallVerified ? false : Boolean(jsonResult.needsStateOrDistrict),
-    stateDistrictPrompt: isVerificationMode || !isOverallVerified ? "" : (jsonResult.stateDistrictPrompt || ""),
+    needsStateOrDistrict: isVerificationMode ? false : Boolean(jsonResult.needsStateOrDistrict),
+    stateDistrictPrompt: isVerificationMode ? "" : (jsonResult.stateDistrictPrompt || ""),
     unverifiedNote: !isOverallVerified ? hardFailReason : (jsonResult.unverifiedNote || ""),
-    requiresDraft: isVerificationMode || !isOverallVerified ? false : Boolean(jsonResult.requiresDraft),
-    draftOffer: isVerificationMode || !isOverallVerified ? "" : (jsonResult.draftOffer || ""),
-    generatedDraft: isVerificationMode || !isOverallVerified ? "" : (jsonResult.generatedDraft || ""),
+    requiresDraft: isVerificationMode ? false : Boolean(jsonResult.requiresDraft),
+    draftOffer: isVerificationMode ? "" : (jsonResult.draftOffer || ""),
+    generatedDraft: isVerificationMode ? "" : (jsonResult.generatedDraft || ""),
     isNewTopic: true,
   };
 }
